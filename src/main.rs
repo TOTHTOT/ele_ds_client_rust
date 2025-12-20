@@ -24,8 +24,12 @@ fn main() -> anyhow::Result<()> {
         "http://webhook.site/3a4413d9-e07a-41c7-a38d-e03aa2f1bd18",
     )?));
     let client_ota = client.clone();
-    let ota = ota::Ota::new(client_ota);
-    log::info!("is need ota, {}", ota.is_need_upgrade()?);
+    let ota = ota::Ota::new(client_ota)?;
+    let is_need_upgrade = ota.is_need_upgrade()?;
+    log::info!("is need ota, {is_need_upgrade}");
+    if is_need_upgrade {
+        // client
+    }
     loop {
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
@@ -49,7 +53,6 @@ pub fn wifi_connect(wifi: &mut EspWifi, ssid: &str, password: &str) -> anyhow::R
     for i in 1..=30 {
         std::thread::sleep(std::time::Duration::from_secs(1));
         if wifi.is_connected()? {
-
             let netif = wifi.sta_netif();
             if let Ok(ip_info) = netif.get_ip_info() {
                 if !ip_info.ip.is_unspecified() {
