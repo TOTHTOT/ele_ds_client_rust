@@ -8,3 +8,6 @@
 5. [ ] 文件系统. 
 6. [ ] 板子上的传感器. 
 7. [ ] 终端, 实现基本控制.
+
+## 备注
+- 执行这个命令可以生成bin文件用于ota升级`espflash save-image --chip esp32s3 target/xtensa-esp32s3-espidf/release/ele_ds_client_rust ./asset/upgrade_file/firmware.bin`
