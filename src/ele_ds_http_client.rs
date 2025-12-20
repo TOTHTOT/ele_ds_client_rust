@@ -3,7 +3,7 @@ use embedded_svc::{http::client::Client, io::Write, utils::io};
 use esp_idf_svc::http::client::EspHttpConnection;
 pub struct EleDsHttpClient {
     client: Client<EspHttpConnection>,
-    server_address: String,
+    pub server_address: String,
 }
 
 impl EleDsHttpClient {
@@ -22,6 +22,7 @@ impl EleDsHttpClient {
             ("content-length", &*msg.len().to_string()),
         ];
         let url = format!("{}{}", self.server_address, path);
+        log::info!("posting to {}", url);
         let mut request = self.client.post(url.as_str(), &headers)?;
         request.write_all(msg.as_bytes())?;
         request.flush()?;
@@ -35,30 +36,24 @@ impl EleDsHttpClient {
         Ok((status, body_string.to_string()))
     }
 
-    pub fn get_file<F>(&mut self, path: &str, mut handle: F) -> anyhow::Result<()>
+    pub fn get_file<F>(&mut self, path: &str, mut handle: F) -> anyhow::Result<(), anyhow::Error>
     where
-        F: FnMut(Response<&mut EspHttpConnection>),
+        F: FnMut(Response<&mut EspHttpConnection>) -> anyhow::Result<()>,
     {
         let url = format!("{}{}", self.server_address, path);
-        log::info!("正在从 URL 下载文件: {}", url);
+        log::info!("Start download file from: {}", url);
 
-        // 1. 发起 GET 请求
-        // 注意：GET 请求通常不需要设置 content-length，headers 留空即可
         let request = self.client.get(url.as_str())?;
 
-        // 2. 提交请求并获取响应
         let response = request.submit()?;
 
-        // 3. 检查状态码
         let status = response.status();
         if status != 200 {
             anyhow::bail!("get file failed: {status}");
         }
-
-        // 4. 返回连接对象本身，因为它实现了 io::Read 特性
-        // 注意：在 esp-idf-svc 中，submit() 返回的是包装后的 Connection
-        // 我们可以直接返回底层的 reader
-        handle(response);
+        log::info!("status: {}", status);
+        handle(response)?;
+        log::info!("handle response success");
         Ok(())
     }
 }

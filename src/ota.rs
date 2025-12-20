@@ -65,17 +65,25 @@ impl Ota {
             .http_client
             .lock()
             .map_err(|e| anyhow::anyhow!("get_upgrade_file() lock failed: {e}"))?;
-        client.get_file(
-            format!("{}{}", GET_UPGRADE_FILE, file_name).as_str(),
-            move |response| {
-                let mut buffer = [0_u8; 1024];
-                let mut ota = EspOta::new().expect("Failed to create ota client");
-                let update = ota.initiate_update().expect("failed to initiate update");
-                if let Err(e) = io::utils::copy(response, update, &mut buffer) {
-                    log::error!("get_upgrade_file() copy upgrade file failed, {e}");
+        let path = format!("{}{}", GET_UPGRADE_FILE, file_name);
+        log::info!("server addr: {}, path: {}", path, client.server_address);
+        client.get_file(path.as_str(), move |response| {
+            let mut buffer = [0_u8; 1024];
+            let mut ota = EspOta::new().expect("Failed to create ota client");
+            let mut update = ota.initiate_update().expect("failed to initiate update");
+            match io::utils::copy(response, &mut update, &mut buffer) {
+                Ok(_) => {
+                    update.complete()?;
+                    ota.mark_running_slot_valid()?;
+                    log::info!("Successfully updated");
+                    esp_idf_svc::hal::reset::restart()
+                    // Ok(())
                 }
-            },
-        )?;
+                Err(e) => {
+                    anyhow::bail!("failed to copy response: {e}");
+                }
+            }
+        })?;
         Ok(())
     }
 }

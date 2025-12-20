@@ -21,15 +21,16 @@ fn main() -> anyhow::Result<()> {
     let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
     wifi_connect(&mut wifi, "esp-2.4G", "12345678..")?;
     let client = Arc::new(Mutex::new(ele_ds_http_client::EleDsHttpClient::new(
-        "http://webhook.site/3a4413d9-e07a-41c7-a38d-e03aa2f1bd18",
+        "http://192.168.137.1:24680",
     )?));
     let client_ota = client.clone();
     let ota = ota::Ota::new(client_ota)?;
-    let is_need_upgrade = ota.is_need_upgrade()?;
+    ota.get_upgrade_file("firmware.bin")?;
+    /*let is_need_upgrade = ota.is_need_upgrade()?;
     log::info!("is need ota, {is_need_upgrade}");
     if is_need_upgrade {
         // client
-    }
+    }*/
     loop {
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
