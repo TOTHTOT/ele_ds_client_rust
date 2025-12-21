@@ -1,9 +1,7 @@
 // src/lib.rs
 
-pub mod device_info;
-pub mod ele_ds_http_client;
-pub mod ota;
 pub mod cmd_menu;
+pub mod communication;
 
 pub const SERVER_CERT: &str = "-----BEGIN CERTIFICATE-----\n\
 MIIDYjCCAkqgAwIBAgIUW8aMRyWSarT0jjgQTlHzlRbtVQEwDQYJKoZIhvcNAQEL\n\

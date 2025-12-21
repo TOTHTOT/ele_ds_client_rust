@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2155
 export BUILD_TIME=$(date +'%Y-%m-%d %H:%M:%S')
 echo "current use version(time): $BUILD_TIME"
 
@@ -7,7 +8,7 @@ set -e
 BUILD_MODE=""
 case "$1" in
 "" | "release")
-    bash scripts/build.sh
+    cargo build --release
     printenv BUILD_TIME
     rm ./asset/upgrade_file/*
     espflash save-image --chip esp32s3 target/xtensa-esp32s3-espidf/release/ele_ds_client_rust "./asset/upgrade_file/${BUILD_TIME}.bin"

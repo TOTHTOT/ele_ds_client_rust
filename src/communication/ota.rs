@@ -1,5 +1,5 @@
-use crate::device_info::DeviceInfo;
-use crate::ele_ds_http_client::{communication, EleDsHttpClient};
+use crate::communication:: device_info::DeviceInfo;
+use crate::communication::ele_ds_http_client::{communication, EleDsHttpClient};
 use chrono::NaiveDateTime;
 use esp_idf_svc::io;
 use esp_idf_svc::ota::EspOta;

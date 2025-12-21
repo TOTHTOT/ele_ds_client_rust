@@ -1,6 +1,6 @@
 use ele_ds_client_rust::{
     cmd_menu::{ShellInterface, ROOT_MENU},
-    ele_ds_http_client, ota,
+    communication::{ele_ds_http_client, ota},
 };
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::peripherals::Peripherals;
@@ -55,7 +55,7 @@ fn main() -> anyhow::Result<()> {
                     runner.input_byte(c, &mut context);
 
                     if c == b'\r' || c == b'\n' {
-                        println!("");
+                        // println!("");
                         print!("> ");
                         let _ = io::stdout().flush();
                     }
