@@ -1,14 +1,64 @@
 use embedded_svc::http::client::Response;
 use embedded_svc::{http::client::Client, io::Write, utils::io};
-use esp_idf_svc::http::client::EspHttpConnection;
+use esp_idf_svc::http::client::{Configuration, EspHttpConnection};
+
+// 和服务器通信的基本数据包
+pub mod communication {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct GeneralHttpResponse {
+        pub seq: u64,
+        pub cmd: String,
+        pub timestamp: u64,
+        pub payload: serde_json::Value,
+    }
+
+    impl GeneralHttpResponse {
+        pub fn get_now_timestamp() -> u64 {
+            match SystemTime::now().duration_since(UNIX_EPOCH) {
+                Ok(time) => time.as_secs(),
+                Err(_) => 0,
+            }
+        }
+
+        pub fn new_response(seq: u64, cmd: String, payload: serde_json::Value) -> Self {
+            Self {
+                seq,
+                cmd,
+                timestamp: Self::get_now_timestamp(),
+                payload,
+            }
+        }
+    }
+}
+
 pub struct EleDsHttpClient {
     client: Client<EspHttpConnection>,
     pub server_address: String,
 }
-
 impl EleDsHttpClient {
     pub fn new(server_address: &str) -> anyhow::Result<Self> {
-        let client = Client::wrap(EspHttpConnection::new(&Default::default())?);
+        let is_https = server_address.to_lowercase().starts_with("https");
+
+        let config = Configuration {
+            use_global_ca_store: false,
+            crt_bundle_attach: None,
+
+            // 如果是 HTTPS，缓冲区必须调大，建议收 10KB，发 4KB
+            buffer_size: if is_https { Some(10240) } else { Some(4096) },
+            buffer_size_tx: if is_https { Some(4096) } else { Some(2048) },
+
+            timeout: Some(std::time::Duration::from_secs(30)),
+            ..Default::default()
+        };
+
+        let connection = EspHttpConnection::new(&config)
+            .map_err(|e| anyhow::anyhow!("Connection init failed: {:?}", e))?;
+
+        let client = Client::wrap(connection);
+
         Ok(Self {
             client,
             server_address: server_address.to_string(),
@@ -40,7 +90,7 @@ impl EleDsHttpClient {
     where
         F: FnMut(Response<&mut EspHttpConnection>) -> anyhow::Result<()>,
     {
-        let url = format!("{}{}", self.server_address, path);
+        let url = format!("{}/{}", self.server_address, path);
         log::info!("Start download file from: {}", url);
 
         let request = self.client.get(url.as_str())?;

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+export BUILD_TIME=$(date +'%Y-%m-%d %H:%M:%S')
+echo "current use version(time): $BUILD_TIME"
 
 set -e
 
@@ -6,6 +8,12 @@ BUILD_MODE=""
 case "$1" in
 "" | "release")
     bash scripts/build.sh
+    printenv BUILD_TIME
+    rm ./asset/upgrade_file/*
+    espflash save-image --chip esp32s3 target/xtensa-esp32s3-espidf/release/ele_ds_client_rust "./asset/upgrade_file/${BUILD_TIME}.bin"
+    cp ./asset/upgrade_file/* ../general_serve/asset/server_root_path/upgrade/ele_ds_client_rust/
+
+    echo "release successes"
     BUILD_MODE="release"
     ;;
 "debug")

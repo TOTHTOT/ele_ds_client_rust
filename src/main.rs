@@ -1,9 +1,14 @@
-use ele_ds_client_rust::{ele_ds_http_client, ota};
+use ele_ds_client_rust::{
+    cmd_menu::{ShellInterface, ROOT_MENU},
+    ele_ds_http_client, ota,
+};
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::peripherals::Peripherals;
 use esp_idf_svc::nvs::{EspNvsPartition, NvsDefault};
 use esp_idf_svc::wifi;
 use esp_idf_svc::wifi::{AuthMethod, EspWifi};
+use menu::Runner;
+use std::io::{self, Read, Write};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 fn main() -> anyhow::Result<()> {
@@ -13,7 +18,7 @@ fn main() -> anyhow::Result<()> {
 
     // Bind the log crate to the ESP Logging facilities
     esp_idf_svc::log::EspLogger::initialize_default();
-    log::info!("system start, build info: {}", env!("BUILD_TIME"));
+    log::info!("system start, build info: {} 12", env!("BUILD_TIME"));
 
     let peripherals = Peripherals::take()?;
     let sysloop = EspSystemEventLoop::take()?;
@@ -21,16 +26,47 @@ fn main() -> anyhow::Result<()> {
     let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
     wifi_connect(&mut wifi, "esp-2.4G", "12345678..")?;
     let client = Arc::new(Mutex::new(ele_ds_http_client::EleDsHttpClient::new(
-        "http://192.168.137.1:24680",
+        "https://60.215.128.73:12675",
     )?));
     let client_ota = client.clone();
     let ota = ota::Ota::new(client_ota)?;
-    ota.get_upgrade_file("firmware.bin")?;
-    /*let is_need_upgrade = ota.is_need_upgrade()?;
-    log::info!("is need ota, {is_need_upgrade}");
-    if is_need_upgrade {
-        // client
-    }*/
+    if let Err(e) = ota.sync_firmware() {
+        log::error!("sync_firmware failed: {}", e);
+    }
+
+    let mut stdin = io::stdin();
+    std::thread::spawn(move || {
+        let mut buffer = [0u8; 128];
+        let mut context = ();
+        let mut runner = Runner::new(ROOT_MENU, &mut buffer, ShellInterface, &mut context);
+        log::info!("shell start");
+        println!("\nESP32 Shell Tool Ready (WDT disabled for this thread)");
+        print!("> ");
+        let _ = io::stdout().flush().unwrap();
+
+        loop {
+            let mut byte = [0u8; 1];
+            match stdin.read(&mut byte) {
+                Ok(n) if n > 0 => {
+                    let c = byte[0];
+                    print!("{}", c as char);
+                    let _ = io::stdout().flush();
+
+                    runner.input_byte(c, &mut context);
+
+                    if c == b'\r' || c == b'\n' {
+                        println!("");
+                        print!("> ");
+                        let _ = io::stdout().flush();
+                    }
+                }
+                Ok(_) | Err(_) => {
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+            }
+        }
+    });
+
     loop {
         std::thread::sleep(std::time::Duration::from_secs(1));
     }

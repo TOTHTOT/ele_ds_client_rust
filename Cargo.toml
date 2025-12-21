@@ -29,10 +29,11 @@ heapless = "0.8"
 chrono = "0.4.42"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
-http = "1.4.0"
 # --- Optional Embassy Integration ---
- esp-idf-svc = { version = "0.51", features = ["critical-section", "embassy-time-driver", "embassy-sync"] }
+esp-idf-svc = { version = "0.51", features = ["critical-section", "embassy-time-driver", "embassy-sync"] }
 embedded-svc = "0.28.1"
+menu = "0.6.1"
+embedded-io = "0.6.1"
 # If you enable embassy-time-driver, you MUST also add one of:
 
 # a) Standalone Embassy libs ( embassy-time, embassy-sync etc.) with a foreign async runtime:
