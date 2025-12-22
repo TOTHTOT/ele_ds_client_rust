@@ -2,6 +2,7 @@
 
 pub mod cmd_menu;
 pub mod communication;
+pub mod power_manage;
 
 pub const SERVER_CERT: &str = "-----BEGIN CERTIFICATE-----\n\
 MIIDYjCCAkqgAwIBAgIUW8aMRyWSarT0jjgQTlHzlRbtVQEwDQYJKoZIhvcNAQEL\n\

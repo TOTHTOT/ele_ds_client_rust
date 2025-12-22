@@ -1,11 +1,15 @@
+use crate::communication::ele_ds_http_client::communication::{
+    GeneralHttpRequest, GeneralHttpResponse, RequestUserInfo,
+};
 use embedded_svc::http::client::Response;
 use embedded_svc::{http::client::Client, io::Write, utils::io};
 use esp_idf_svc::http::client::{Configuration, EspHttpConnection};
+use std::ops::Add;
 
 // 和服务器通信的基本数据包
 pub mod communication {
-    use std::time::{SystemTime, UNIX_EPOCH};
     use serde::{Deserialize, Serialize};
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[derive(Debug, Serialize, Deserialize)]
     pub struct GeneralHttpResponse {
@@ -32,10 +36,33 @@ pub mod communication {
             }
         }
     }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct RequestUserInfo {
+        pub username: String,
+        pub password: String,
+    }
+    impl Default for RequestUserInfo {
+        fn default() -> Self {
+            Self {
+                username: "test".to_string(),
+                password: "test".to_string(),
+            }
+        }
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct GeneralHttpRequest {
+        pub user_info: RequestUserInfo,
+        pub timestamp: u64,
+        pub seq: u64,
+        pub payload: serde_json::Value,
+    }
 }
 
 pub struct EleDsHttpClient {
     client: Client<EspHttpConnection>,
+    seq: u64,
     pub server_address: String,
 }
 impl EleDsHttpClient {
@@ -61,28 +88,49 @@ impl EleDsHttpClient {
 
         Ok(Self {
             client,
+            seq: 0,
             server_address: server_address.to_string(),
         })
     }
 
     /// 发送一个post请求数据格式是json
-    pub fn post_msg(&mut self, path: &str, msg: &str) -> anyhow::Result<(u16, String)> {
-        let headers = [
-            ("content-type", "application/json"),
-            ("content-length", &*msg.len().to_string()),
-        ];
+    pub fn post_msg(
+        &mut self,
+        path: &str,
+        msg: serde_json::Value,
+    ) -> anyhow::Result<(u16, String)> {
+        let request_str = serde_json::to_string(&GeneralHttpRequest {
+            user_info: RequestUserInfo::default(),
+            timestamp: GeneralHttpResponse::get_now_timestamp(),
+            seq: self.seq.add(1),
+            payload: msg,
+        })?;
+
+        let headers = [("content-type", "application/json")];
         let url = format!("{}{}", self.server_address, path);
         log::info!("posting to {}", url);
         let mut request = self.client.post(url.as_str(), &headers)?;
-        request.write_all(msg.as_bytes())?;
+        request.write_all(request_str.as_bytes())?;
         request.flush()?;
         let mut response = request.submit()?;
 
         let status = response.status();
         log::info!("status: {}", status);
-        let mut buf = [0u8; 1024];
-        let bytes_read = io::try_read_full(&mut response, &mut buf).map_err(|e| e.0)?;
-        let body_string = std::str::from_utf8(&buf[0..bytes_read])?;
+
+        // 读取任意长度数据并保存到 recv_vec
+        let mut recv_vec = Vec::new();
+        loop {
+            let mut buf = [0u8; 256];
+            match io::try_read_full(&mut response, &mut buf) {
+                Ok(0) => break, // 读到0说明读完数据了
+                Ok(n) => {
+                    recv_vec.extend_from_slice(&buf[..n]);
+                    n
+                }
+                Err(e) => return Err(anyhow::anyhow!("post_msg read response failed, {}", e.0)),
+            };
+        }
+        let body_string = String::from_utf8(recv_vec)?;
         Ok((status, body_string.to_string()))
     }
 

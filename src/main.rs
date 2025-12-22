@@ -1,6 +1,7 @@
 use ele_ds_client_rust::{
     cmd_menu::{ShellInterface, ROOT_MENU},
     communication::{ele_ds_http_client, ota},
+    power_manage,
 };
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::peripherals::Peripherals;
@@ -33,7 +34,7 @@ fn main() -> anyhow::Result<()> {
     if let Err(e) = ota.sync_firmware() {
         log::error!("sync_firmware failed: {}", e);
     }
-
+    // power_manage::enter_sleep_mode()?;
     let mut stdin = io::stdin();
     std::thread::spawn(move || {
         let mut buffer = [0u8; 128];

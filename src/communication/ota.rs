@@ -24,12 +24,12 @@ impl Ota {
         Ok(Ota { http_client })
     }
     pub fn is_need_upgrade(&self) -> anyhow::Result<Option<UpgradeQueryResponse>> {
-        let device_info = serde_json::to_string(&DeviceInfo::default())?;
+        let device_info = serde_json::json!(&DeviceInfo::default());
         let mut client = self
             .http_client
             .lock()
             .map_err(|e| anyhow::anyhow!("is_need_upgrade() lock client fail, {e}"))?;
-        let (statue, response_json) = client.post_msg(REQUERY_WHETHER_UPGRADE, &device_info)?;
+        let (statue, response_json) = client.post_msg(REQUERY_WHETHER_UPGRADE, device_info)?;
         if statue != 200 {
             return Err(anyhow::anyhow!(
                 "get upgrade response failed, {response_json}"
