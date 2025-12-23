@@ -1,17 +1,10 @@
 use ele_ds_client_rust::{
+    board::BoardPeripherals,
     cmd_menu::{ShellInterface, ROOT_MENU},
     communication::{ele_ds_http_client, ota},
-    device_config::DeviceConfig,
-    file_system::nvs_flash_filesystem_init,
 };
-use esp_idf_svc::eventloop::EspSystemEventLoop;
-use esp_idf_svc::hal::peripherals::Peripherals;
-use esp_idf_svc::nvs::{EspNvsPartition, NvsDefault};
-use esp_idf_svc::wifi;
-use esp_idf_svc::wifi::{AuthMethod, EspWifi};
 use menu::Runner;
 use std::io::{self, Read, Write};
-use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 fn main() -> anyhow::Result<()> {
     // It is necessary to call this function once. Otherwise, some patches to the runtime
@@ -21,24 +14,15 @@ fn main() -> anyhow::Result<()> {
     // Bind the log crate to the ESP Logging facilities
     esp_idf_svc::log::EspLogger::initialize_default();
     log::info!("system start, build info: {} 12", env!("BUILD_TIME"));
-
-    let peripherals = Peripherals::take()?;
-    let sysloop = EspSystemEventLoop::take()?;
-    let nvs = EspNvsPartition::<NvsDefault>::take()?;
-
-    nvs_flash_filesystem_init()?;
-    let device_config = DeviceConfig::load_config()?;
-    log::info!("device config: {:?}", device_config);
-
-    let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
-    match wifi_connect(&mut wifi, "esp-2.4G", "12345678..") {
+    let _board = BoardPeripherals::new()?;
+    /*match wifi_connect(&mut wifi, "esp-2.4G", "12345678..") {
         Ok(_) => {
             if let Err(e) = after_wifi_established() {
                 log::warn!("after_wifi_established() failed: {e}")
             }
         }
         Err(_) => log::warn!("failed to connect wifi"),
-    }
+    }*/
 
     let mut stdin = io::stdin();
     std::thread::spawn(move || {
@@ -77,36 +61,6 @@ fn main() -> anyhow::Result<()> {
         std::thread::sleep(std::time::Duration::from_secs(1));
         // ele_ds_client_rust::power_manage::enter_deep_sleep_mode();
     }
-}
-
-pub fn wifi_connect(wifi: &mut EspWifi, ssid: &str, password: &str) -> anyhow::Result<()> {
-    let ssid = heapless::String::<32>::from_str(ssid)
-        .map_err(|_| anyhow::anyhow!("ssid too long:{ssid}"))?;
-    let password = heapless::String::<64>::from_str(password)
-        .map_err(|_| anyhow::anyhow!("passwd too long:{password}"))?;
-    let wifi_cfg = wifi::Configuration::Client(wifi::ClientConfiguration {
-        ssid,
-        password,
-        auth_method: AuthMethod::WPA2Personal,
-        ..Default::default()
-    });
-    wifi.set_configuration(&wifi_cfg)?;
-    wifi.start()?;
-    wifi.connect()?;
-
-    for i in 1..=30 {
-        std::thread::sleep(std::time::Duration::from_secs(1));
-        if wifi.is_connected()? {
-            let netif = wifi.sta_netif();
-            if let Ok(ip_info) = netif.get_ip_info() {
-                if !ip_info.ip.is_unspecified() {
-                    log::info!("WiFi connected IP: {:?}, total used time: {i}", ip_info.ip);
-                    return Ok(());
-                }
-            }
-        }
-    }
-    anyhow::bail!("WiFi connect failed");
 }
 
 /// wifi 连接成功要做的一些内容
