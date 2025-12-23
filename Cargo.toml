@@ -37,7 +37,7 @@ embedded-io = "0.6.1"
 # If you enable embassy-time-driver, you MUST also add one of:
 
 # a) Standalone Embassy libs ( embassy-time, embassy-sync etc.) with a foreign async runtime:
-# embassy-time = { version = "0.4.0", features = ["generic-queue-8"] } # NOTE: any generic-queue variant will work
+ embassy-time = { version = "0.4.0", features = ["generic-queue-8"] } # NOTE: any generic-queue variant will work
 
 # b) With embassy-executor:
 # embassy-executor = { version = "0.7", features = ["executor-thread", "arch-std"] }

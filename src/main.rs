@@ -1,6 +1,8 @@
 use ele_ds_client_rust::{
     cmd_menu::{ShellInterface, ROOT_MENU},
     communication::{ele_ds_http_client, ota},
+    device_config::DeviceConfig,
+    file_system::nvs_flash_filesystem_init,
 };
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::peripherals::Peripherals;
@@ -23,6 +25,11 @@ fn main() -> anyhow::Result<()> {
     let peripherals = Peripherals::take()?;
     let sysloop = EspSystemEventLoop::take()?;
     let nvs = EspNvsPartition::<NvsDefault>::take()?;
+
+    nvs_flash_filesystem_init()?;
+    let device_config = DeviceConfig::load_config()?;
+    log::info!("device config: {:?}", device_config);
+
     let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
     match wifi_connect(&mut wifi, "esp-2.4G", "12345678..") {
         Ok(_) => {
@@ -68,7 +75,7 @@ fn main() -> anyhow::Result<()> {
 
     loop {
         std::thread::sleep(std::time::Duration::from_secs(1));
-        ele_ds_client_rust::power_manage::enter_deep_sleep_mode();
+        // ele_ds_client_rust::power_manage::enter_deep_sleep_mode();
     }
 }
 

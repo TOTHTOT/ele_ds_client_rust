@@ -1,4 +1,4 @@
-use crate::communication:: device_info::DeviceInfo;
+use crate::device_config::DeviceInfo;
 use crate::communication::ele_ds_http_client::{communication, EleDsHttpClient};
 use chrono::NaiveDateTime;
 use esp_idf_svc::io;
