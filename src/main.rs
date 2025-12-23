@@ -1,7 +1,6 @@
 use ele_ds_client_rust::{
     cmd_menu::{ShellInterface, ROOT_MENU},
     communication::{ele_ds_http_client, ota},
-    power_manage,
 };
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::peripherals::Peripherals;
@@ -25,16 +24,15 @@ fn main() -> anyhow::Result<()> {
     let sysloop = EspSystemEventLoop::take()?;
     let nvs = EspNvsPartition::<NvsDefault>::take()?;
     let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
-    wifi_connect(&mut wifi, "esp-2.4G", "12345678..")?;
-    let client = Arc::new(Mutex::new(ele_ds_http_client::EleDsHttpClient::new(
-        "https://60.215.128.73:12675",
-    )?));
-    let client_ota = client.clone();
-    let ota = ota::Ota::new(client_ota)?;
-    if let Err(e) = ota.sync_firmware() {
-        log::error!("sync_firmware failed: {}", e);
+    match wifi_connect(&mut wifi, "esp-2.4G", "12345678..") {
+        Ok(_) => {
+            if let Err(e) = after_wifi_established() {
+                log::warn!("after_wifi_established() failed: {e}")
+            }
+        }
+        Err(_) => log::warn!("failed to connect wifi"),
     }
-    // power_manage::enter_sleep_mode()?;
+
     let mut stdin = io::stdin();
     std::thread::spawn(move || {
         let mut buffer = [0u8; 128];
@@ -70,6 +68,7 @@ fn main() -> anyhow::Result<()> {
 
     loop {
         std::thread::sleep(std::time::Duration::from_secs(1));
+        ele_ds_client_rust::power_manage::enter_deep_sleep_mode();
     }
 }
 
@@ -101,4 +100,23 @@ pub fn wifi_connect(wifi: &mut EspWifi, ssid: &str, password: &str) -> anyhow::R
         }
     }
     anyhow::bail!("WiFi connect failed");
+}
+
+/// wifi 连接成功要做的一些内容
+pub fn after_wifi_established() -> anyhow::Result<()> {
+    // 创建http客户端
+    let client = Arc::new(Mutex::new(ele_ds_http_client::EleDsHttpClient::new(
+        "https://60.215.128.73:12675",
+    )?));
+    let client_ota = client.clone();
+    let ota = ota::Ota::new(client_ota);
+    match ota {
+        Ok(ota) => {
+            if let Err(e) = ota.sync_firmware() {
+                log::error!("sync_firmware failed: {}", e);
+            }
+        }
+        Err(e) => log::warn!("create ota failed, {:?}", e),
+    }
+    Ok(())
 }
