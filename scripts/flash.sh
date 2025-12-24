@@ -26,5 +26,5 @@ case "$1" in
     exit 1
     ;;
 esac
-
+unset BUILD_TIME
 web-flash --chip esp32s3 target/xtensa-esp32s3-espidf/${BUILD_MODE}/ele_ds_client_rust
