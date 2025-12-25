@@ -1,3 +1,5 @@
+mod psram;
+
 use crate::device_config::DeviceConfig;
 use crate::file_system::nvs_flash_filesystem_init;
 use embedded_svc::wifi;
@@ -7,6 +9,7 @@ use esp_idf_svc::hal::peripherals::Peripherals;
 use esp_idf_svc::nvs::{EspNvsPartition, NvsDefault};
 use esp_idf_svc::wifi::EspWifi;
 use std::str::FromStr;
+use crate::communication::http_server::HttpServer;
 
 #[allow(dead_code)]
 pub struct BoardPeripherals<'d> {
@@ -17,7 +20,10 @@ impl<'d> BoardPeripherals<'d> {
         let peripherals = Peripherals::take()?;
         let sysloop = EspSystemEventLoop::take()?;
         let nvs = EspNvsPartition::<NvsDefault>::take()?;
+        psram::check_psram();
+
         BoardPeripherals::init_filesystem_load_config()?;
+        HttpServer::new()?;
 
         /*let driver_config = Default::default();
         let spi_drv = SpiDriver::new(

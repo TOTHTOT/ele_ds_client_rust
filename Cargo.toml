@@ -34,6 +34,7 @@ esp-idf-svc = { version = "0.51", features = ["critical-section", "embassy-time-
 embedded-svc = "0.28.1"
 menu = "0.6.1"
 embedded-io = "0.6.1"
+esp-idf-sys = "0.36"
 # If you enable embassy-time-driver, you MUST also add one of:
 
 # a) Standalone Embassy libs ( embassy-time, embassy-sync etc.) with a foreign async runtime:

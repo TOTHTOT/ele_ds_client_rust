@@ -3,7 +3,6 @@ use ele_ds_client_rust::{
     cmd_menu::{ShellInterface, ROOT_MENU},
     communication::{http_client, ota},
 };
-use menu::Runner;
 use std::io::{self, Read, Write};
 use std::sync::{Arc, Mutex};
 fn main() -> anyhow::Result<()> {
