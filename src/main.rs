@@ -1,7 +1,7 @@
 use ele_ds_client_rust::{
     board::BoardPeripherals,
     cmd_menu::{ShellInterface, ROOT_MENU},
-    communication::{ele_ds_http_client, ota},
+    communication::{http_client, ota},
 };
 use menu::Runner;
 use std::io::{self, Read, Write};
@@ -66,7 +66,7 @@ fn main() -> anyhow::Result<()> {
 /// wifi 连接成功要做的一些内容
 pub fn after_wifi_established() -> anyhow::Result<()> {
     // 创建http客户端
-    let client = Arc::new(Mutex::new(ele_ds_http_client::EleDsHttpClient::new(
+    let client = Arc::new(Mutex::new(http_client::EleDsHttpClient::new(
         "https://60.215.128.73:12675",
     )?));
     let client_ota = client.clone();

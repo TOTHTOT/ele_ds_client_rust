@@ -1,4 +1,4 @@
-use crate::communication::ele_ds_http_client::communication::{
+use crate::communication::http_client::communication::{
     GeneralHttpRequest, GeneralHttpResponse, RequestUserInfo,
 };
 use embedded_svc::http::client::Response;
