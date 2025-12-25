@@ -24,38 +24,6 @@ fn main() -> anyhow::Result<()> {
         Err(_) => log::warn!("failed to connect wifi"),
     }*/
 
-    let mut stdin = io::stdin();
-    std::thread::spawn(move || {
-        let mut buffer = [0u8; 128];
-        let mut context = ();
-        let mut runner = Runner::new(ROOT_MENU, &mut buffer, ShellInterface, &mut context);
-        log::info!("shell start");
-        println!("\nESP32 Shell Tool Ready (WDT disabled for this thread)");
-        print!("> ");
-        let _ = io::stdout().flush().unwrap();
-
-        loop {
-            let mut byte = [0u8; 1];
-            match stdin.read(&mut byte) {
-                Ok(n) if n > 0 => {
-                    let c = byte[0];
-                    print!("{}", c as char);
-                    let _ = io::stdout().flush();
-
-                    runner.input_byte(c, &mut context);
-
-                    if c == b'\r' || c == b'\n' {
-                        // println!("");
-                        print!("> ");
-                        let _ = io::stdout().flush();
-                    }
-                }
-                Ok(_) | Err(_) => {
-                    std::thread::sleep(std::time::Duration::from_millis(20));
-                }
-            }
-        }
-    });
 
     loop {
         std::thread::sleep(std::time::Duration::from_secs(1));

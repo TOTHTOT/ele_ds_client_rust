@@ -1,5 +1,5 @@
 use menu::*;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 
 // 这是一个适配器，让 std::io 能够被嵌入式库使用
 pub struct ShellInterface;
@@ -30,7 +30,7 @@ type MyItemType<'a> = Item<'a, ShellInterface, ()>;
 fn cmd_help(
     _menu: &MyMenuType,
     _item: &MyItemType,
-    _args: &[&str], // 修改点
+    _args: &[&str],                  // 修改点
     _interface: &mut ShellInterface, // 新增点
     _context: &mut (),
 ) {
@@ -40,7 +40,7 @@ fn cmd_help(
 fn cmd_reboot(
     _menu: &MyMenuType,
     _item: &MyItemType,
-    _args: &[&str], // 修改点
+    _args: &[&str],                  // 修改点
     _interface: &mut ShellInterface, // 新增点
     _context: &mut (),
 ) {
@@ -73,3 +73,38 @@ pub const ROOT_MENU: Menu<ShellInterface, ()> = Menu {
     entry: None,
     exit: None,
 };
+pub fn init_cmd() -> anyhow::Result<()> {
+    let mut stdin = io::stdin();
+    std::thread::spawn(move || {
+        let mut buffer = [0u8; 128];
+        let mut context = ();
+        let mut runner = Runner::new(ROOT_MENU, &mut buffer, ShellInterface, &mut context);
+        log::info!("shell start");
+        println!("\nESP32 Shell Tool Ready (WDT disabled for this thread)");
+        print!("> ");
+        let _ = io::stdout().flush().unwrap();
+
+        loop {
+            let mut byte = [0u8; 1];
+            match stdin.read(&mut byte) {
+                Ok(n) if n > 0 => {
+                    let c = byte[0];
+                    print!("{}", c as char);
+                    let _ = io::stdout().flush();
+
+                    runner.input_byte(c, &mut context);
+
+                    if c == b'\r' || c == b'\n' {
+                        // println!("");
+                        print!("> ");
+                        let _ = io::stdout().flush();
+                    }
+                }
+                Ok(_) | Err(_) => {
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+            }
+        }
+    });
+    Ok(())
+}
