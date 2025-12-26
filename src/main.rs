@@ -1,13 +1,10 @@
 use ele_ds_client_rust::{
     board::BoardPeripherals,
-    cmd_menu::{ShellInterface, ROOT_MENU},
+    cmd_menu::{ShellInterface},
     communication::{http_client, ota},
 };
-use std::io::{self, Read, Write};
 use std::sync::{Arc, Mutex};
 fn main() -> anyhow::Result<()> {
-    // It is necessary to call this function once. Otherwise, some patches to the runtime
-    // implemented by esp-idf-sys might not link properly. See https://github.com/esp-rs/esp-idf-template/issues/71
     esp_idf_svc::sys::link_patches();
 
     // Bind the log crate to the ESP Logging facilities
