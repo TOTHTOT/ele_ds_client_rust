@@ -1,6 +1,5 @@
 use ele_ds_client_rust::{
     board::BoardPeripherals,
-    cmd_menu::{ShellInterface},
     communication::{http_client, ota},
 };
 use std::sync::{Arc, Mutex};
