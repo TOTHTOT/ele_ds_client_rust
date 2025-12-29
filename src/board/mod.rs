@@ -14,6 +14,7 @@ use crate::communication::http_server::HttpServer;
 #[allow(dead_code)]
 pub struct BoardPeripherals<'d> {
     wifi: EspWifi<'d>,
+    http_server: HttpServer<'d>,
 }
 impl<'d> BoardPeripherals<'d> {
     pub fn new() -> anyhow::Result<BoardPeripherals<'d>> {
@@ -23,7 +24,6 @@ impl<'d> BoardPeripherals<'d> {
         psram::check_psram();
 
         BoardPeripherals::init_filesystem_load_config()?;
-        HttpServer::new()?;
 
         /*let driver_config = Default::default();
         let spi_drv = SpiDriver::new(
@@ -34,8 +34,10 @@ impl<'d> BoardPeripherals<'d> {
             &driver_config,
         )?;*/
 
-        let wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
-        Ok(BoardPeripherals { wifi })
+        let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
+        Self::wifi_connect(&mut wifi, "esp-2.4G", "12345678..")?;
+        let http_server = HttpServer::new()?;
+        Ok(BoardPeripherals { wifi, http_server })
     }
 
     fn init_filesystem_load_config() -> anyhow::Result<()> {

@@ -4,30 +4,28 @@ use esp_idf_svc::http::server::{Configuration, EspHttpConnection, EspHttpServer}
 use std::fs;
 use std::fs::FileType;
 use std::path::PathBuf;
+
+#[allow(dead_code)]
 pub struct HttpServer<'d> {
     server: EspHttpServer<'d>,
 }
-
+#[allow(dead_code)]
 impl<'d> HttpServer<'d> {
     pub fn new() -> anyhow::Result<HttpServer<'d>> {
         let config = Configuration {
-            stack_size: 10240, // 增加栈空间，默认值可能对 Rust 来说太小了
+            stack_size: 10240,
+            uri_match_wildcard: true,
             ..Default::default()
         };
-
-        // 2. 创建服务器实例
         let mut server = EspHttpServer::new(&config)?;
-        // server.handler("/fat*", Method::Get, HttpServer::list_directory_handler)?;
-        server.handler("/fat*", Method::Get, |req| {
-            if let Err(e) = Self::list_directory_handler(req) {
-                log::error!("Handler error: {:?}", e);
-            }
-            Ok(())
+        server.fn_handler("/fat*", Method::Get, |req| {
+            Self::list_directory_handler(req)
         })?;
         Ok(Self { server })
     }
 
-    fn get_dir_file_path(path: &str) -> anyhow::Result<Vec<(PathBuf, FileType)>> {
+    /// 根据传入路径获取路径内文件夹和文件并回传
+    fn get_dir_contents_with_path(path: &str) -> anyhow::Result<Vec<(PathBuf, FileType)>> {
         let mut path_vec = Vec::<(PathBuf, FileType)>::new();
         match fs::read_dir(path) {
             Ok(entries) => {
@@ -45,42 +43,39 @@ impl<'d> HttpServer<'d> {
                 log::info!("{path}: {:?}", path_vec)
             }
             Err(e) => {
-                log::warn!("get_dir_file_path(): {e}")
+                anyhow::bail!(e);
             }
         }
         Ok(path_vec)
     }
 
-    fn generate_html(current_path: &str, items: Vec<(PathBuf, std::fs::FileType)>) -> String {
+    /// 生成文件和目录的 html 字符串
+    fn generate_dir_file_html(current_path: &str, items: &Vec<(PathBuf, FileType)>) -> String {
         let mut html = String::new();
         html.push_str(
             "<html><head><meta charset='utf-8'><title>ESP32 File Server</title></head><body>",
         );
-        html.push_str(&format!("<h1>当前目录: {}</h1>", current_path));
+        html.push_str(&format!("<h1>current direct: {}</h1>", current_path));
 
-        // 1. 添加“返回上一级”连接
         if current_path != "/fat/" {
-            html.push_str("<p><a href='..'>[ ⬆️ 返回上一级 ]</a></p>");
+            html.push_str("<p><a href='..'>[ ⬆️ return ]</a></p>");
         }
-
         html.push_str("<ul>");
 
         for (path, f_type) in items {
-            // 获取文件名（去掉完整的路径前缀）
             if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
                 let icon = if f_type.is_dir() { "📁" } else { "📄" };
 
-                // 如果是目录，给路径末尾加上 / 方便浏览器识别路径层级
-                let link_name = if f_type.is_dir() {
-                    format!("{}/", file_name)
+                let link_name = if path.is_dir() {
+                    format!("{}{}/", current_path, file_name)
                 } else {
-                    file_name.to_string()
+                    format!("{}{}", current_path, file_name)
                 };
+                log::info!("link_name: {link_name}");
 
-                // 生成超链接：<a href="文件名">图标 文件名</a>
                 html.push_str(&format!(
                     "<li>{} <a href='{}'>{}</a></li>",
-                    icon, link_name, link_name
+                    icon, link_name, file_name
                 ));
             }
         }
@@ -89,67 +84,59 @@ impl<'d> HttpServer<'d> {
         html
     }
 
-    // 处理文件列表请求的回调函数
+    /// 根据路径获取文件夹内容失败时返回
+    fn generate_dir_file_failed_html(current_path: &str, error_msg: &str) -> String {
+        let mut html = String::new();
+        html.push_str("<html><head><meta charset='utf-8'><title>错误 - ESP32</title>");
+        html.push_str("<style>body{font-family:sans-serif;padding:20px;line-height:1.6;}\
+                   .error-box{border:1px solid #ff4444;background:#fff5f5;padding:15px;border-radius:5px;}\
+                   .btn{display:inline-block;padding:8px 15px;background:#007bff;color:white;text-decoration:none;border-radius:4px;}</style>");
+        html.push_str("</head><body>");
+
+        html.push_str("<h1>⚠️ Read path failed</h1>");
+        html.push_str("<div class='error-box'>");
+        html.push_str(&format!("<p><strong>Path:</strong> {}</p>", current_path));
+        html.push_str(&format!("<p><strong>Reason:</strong> {}</p>", error_msg));
+        html.push_str("</div>");
+
+        html.push_str("<p style='margin-top:20px;'>");
+        html.push_str("<a href='..' class='btn'>[ ⬅️ return ]</a>");
+        html.push_str("</p>");
+
+        html.push_str("</body></html>");
+        html
+    }
+
+    /// 处理文件列表请求的回调函数
     pub fn list_directory_handler(req: Request<&mut EspHttpConnection>) -> anyhow::Result<()> {
-        // 1. 获取当前请求的路径，如果没有则默认为 /fat/
         let mut uri = req.uri().to_string();
+        // 如果字符串是空的或者只有一个 / 就补全目录, 有的浏览器在没输入路径时自动传入 /
         if uri.is_empty() {
             uri = "/fat/".to_string();
+        } else if uri == "/" {
+            uri = "/fat/".to_string();
         }
-
-        // 确保路径以 / 结尾，这对浏览器的 ".." 相对路径逻辑至关重要
         if !uri.ends_with('/') {
             uri.push('/');
         }
 
         log::info!("Handling request for path: {}", uri);
-
-        // 2. 获取目录下的文件列表
-        let path_vec = Self::get_dir_file_path(&uri).unwrap_or_default();
-
-        // 3. 开始发送 HTTP 响应
         let mut response = req.into_ok_response()?;
-
-        // 为了节省内存，我们分段写入 response，而不是构造一个巨大的 String
-        response.write_all(
-            b"<html><head><meta charset='utf-8'><style>\
-            body { font-family: sans-serif; line-height: 1.6; padding: 20px; }\
-            a { text-decoration: none; color: #007bff; }\
-            li { list-style: none; margin-bottom: 8px; }\
-            </style></head><body>",
-        )?;
-
-        response.write_all(format!("<h1>目录索引: {}</h1>", uri).as_bytes())?;
-
-        // 4. 添加“返回上一级”
-        if uri != "/fat/" {
-            response.write_all(b"<div><a href='..'>[ \xE2\xAC\x85 return ]</a></div><hr>")?;
-        }
-
-        response.write_all(b"<ul>")?;
-
-        // 5. 遍历并发送列表项
-        for (path, f_type) in path_vec {
-            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                let icon = if f_type.is_dir() { "dir" } else { "file" };
-
-                // 目录链接需要带 /
-                let link_path = if f_type.is_dir() {
-                    format!("{}/", name)
-                } else {
-                    name.to_string()
+        let path = PathBuf::from(&uri);
+        fs::metadata(&path)?;
+        let response_str = match path.is_dir() {
+            true => {
+                let response_str = match Self::get_dir_contents_with_path(&uri) {
+                    Ok(path_vec) => Self::generate_dir_file_html(uri.as_str(), &path_vec),
+                    Err(e) => {
+                        Self::generate_dir_file_failed_html(uri.as_str(), format!("{}", e).as_str())
+                    }
                 };
-
-                let line = format!(
-                    "<li>{} <a href='{}'>{}</a></li>",
-                    icon, link_path, link_path
-                );
-                response.write_all(line.as_bytes())?;
+                response_str
             }
-        }
-
-        response.write_all(b"</ul></body></html>")?;
-
+            false => String::new(),
+        };
+        response.write_all(response_str.as_bytes())?;
         Ok(())
     }
 }
