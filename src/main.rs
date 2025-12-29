@@ -10,15 +10,6 @@ fn main() -> anyhow::Result<()> {
     esp_idf_svc::log::EspLogger::initialize_default();
     log::info!("system start, build info: {} 12", env!("BUILD_TIME"));
     let _board = BoardPeripherals::new()?;
-    /*match wifi_connect(&mut wifi, "esp-2.4G", "12345678..") {
-        Ok(_) => {
-            if let Err(e) = after_wifi_established() {
-                log::warn!("after_wifi_established() failed: {e}")
-            }
-        }
-        Err(_) => log::warn!("failed to connect wifi"),
-    }*/
-
 
     loop {
         std::thread::sleep(std::time::Duration::from_secs(1));

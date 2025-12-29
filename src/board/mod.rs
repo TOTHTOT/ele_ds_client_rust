@@ -1,5 +1,6 @@
 mod psram;
 
+use crate::communication::http_server::HttpServer;
 use crate::device_config::DeviceConfig;
 use crate::file_system::nvs_flash_filesystem_init;
 use embedded_svc::wifi;
@@ -9,12 +10,12 @@ use esp_idf_svc::hal::peripherals::Peripherals;
 use esp_idf_svc::nvs::{EspNvsPartition, NvsDefault};
 use esp_idf_svc::wifi::EspWifi;
 use std::str::FromStr;
-use crate::communication::http_server::HttpServer;
 
 #[allow(dead_code)]
 pub struct BoardPeripherals<'d> {
     wifi: EspWifi<'d>,
     http_server: HttpServer<'d>,
+    device_config: DeviceConfig,
 }
 impl<'d> BoardPeripherals<'d> {
     pub fn new() -> anyhow::Result<BoardPeripherals<'d>> {
@@ -23,7 +24,7 @@ impl<'d> BoardPeripherals<'d> {
         let nvs = EspNvsPartition::<NvsDefault>::take()?;
         psram::check_psram();
 
-        BoardPeripherals::init_filesystem_load_config()?;
+        let device_config = BoardPeripherals::init_filesystem_load_config()?;
 
         /*let driver_config = Default::default();
         let spi_drv = SpiDriver::new(
@@ -35,16 +36,30 @@ impl<'d> BoardPeripherals<'d> {
         )?;*/
 
         let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
-        Self::wifi_connect(&mut wifi, "RAYNEN", "RN603933")?;
+        if let Some(ssid) = device_config.wifi_ssid.as_ref().take() {
+            Self::wifi_connect(
+                &mut wifi,
+                ssid,
+                device_config
+                    .wifi_password
+                    .as_ref()
+                    .take()
+                    .expect("get wifi_password failed"),
+            )?;
+        }
         let http_server = HttpServer::new()?;
-        Ok(BoardPeripherals { wifi, http_server })
+        Ok(BoardPeripherals {
+            wifi,
+            http_server,
+            device_config,
+        })
     }
 
-    fn init_filesystem_load_config() -> anyhow::Result<()> {
+    fn init_filesystem_load_config() -> anyhow::Result<DeviceConfig> {
         nvs_flash_filesystem_init()?;
         let device_config = DeviceConfig::load_config()?;
         log::info!("device config: {:?}", device_config);
-        Ok(())
+        Ok(device_config)
     }
     pub fn wifi_connect(wifi: &mut EspWifi, ssid: &str, password: &str) -> anyhow::Result<()> {
         let ssid = heapless::String::<32>::from_str(ssid)

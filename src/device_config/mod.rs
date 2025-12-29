@@ -37,6 +37,8 @@ impl Default for UserInfo {
 pub struct DeviceConfig {
     user_info: UserInfo,
     device_info: DeviceInfo,
+    pub wifi_ssid: Option<String>,
+    pub wifi_password: Option<String>,
     requery_upgrade_time_minutes: u32, // 查询更新版本间隔, 单位: 分钟
 }
 
@@ -45,6 +47,8 @@ impl Default for DeviceConfig {
         Self {
             user_info: UserInfo::default(),
             device_info: DeviceInfo::default(),
+            wifi_ssid: Some("esp-2.4G".to_string()),
+            wifi_password: Some("12345678..".to_string()),
             requery_upgrade_time_minutes: 1440,
         }
     }
@@ -53,6 +57,7 @@ impl Default for DeviceConfig {
 impl DeviceConfig {
     /// 加载配置
     pub fn load_config() -> anyhow::Result<DeviceConfig> {
+        Self::delete_config_file()?;
         let config_string = match fs::read_to_string(DEFAULT_DEVICE_CONFIG_FILE_PATH) {
             Ok(string) => string,
             Err(e) => {
@@ -88,6 +93,10 @@ impl DeviceConfig {
         Ok(())
     }
 
+    pub fn delete_config_file() -> anyhow::Result<()> {
+        fs::remove_file(DEFAULT_DEVICE_CONFIG_FILE_PATH)?;
+        Ok(())
+    }
     pub fn set_user_info(&mut self, user_info: UserInfo) {
         self.user_info = user_info;
     }

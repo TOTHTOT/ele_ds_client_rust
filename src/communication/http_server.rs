@@ -63,7 +63,7 @@ impl<'d> HttpServer<'d> {
         html.push_str(&format!("<h1>current direct: {}</h1>", current_path));
 
         if current_path != "/fat/" {
-            html.push_str("<p><a href='..'>[ ⬆️ return ]</a></p>");
+            html.push_str("<p><a href='..'>[ ⬅️ return ]</a></p>");
         }
         html.push_str("<ul>");
 
@@ -125,7 +125,7 @@ impl<'d> HttpServer<'d> {
     ) -> anyhow::Result<()> {
         response.write_all(b"<html><head><meta charset='utf-8'></head><body>")?;
         response.write_all(format!("<h3>file content: {}</h3>", current_path).as_bytes())?;
-        response.write_all("<a href='..' class='btn'>[ ⬅️ return ]</a>".as_bytes())?;
+        response.write_all("<a href='.' class='btn'>[ ⬅️ return ]</a><br><br>".as_bytes())?;
 
         let mut file = fs::File::open(current_path)?;
         let mut buf = [0_u8; 256];
@@ -139,7 +139,6 @@ impl<'d> HttpServer<'d> {
         }
 
         response.write_all(b"</pre></body></html>")?;
-
         Ok(())
     }
 
