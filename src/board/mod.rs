@@ -35,7 +35,7 @@ impl<'d> BoardPeripherals<'d> {
         )?;*/
 
         let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
-        Self::wifi_connect(&mut wifi, "esp-2.4G", "12345678..")?;
+        Self::wifi_connect(&mut wifi, "RAYNEN", "RN603933")?;
         let http_server = HttpServer::new()?;
         Ok(BoardPeripherals { wifi, http_server })
     }
