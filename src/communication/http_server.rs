@@ -1,8 +1,10 @@
+use embedded_svc::http::server::Response;
 use embedded_svc::http::Method;
 use embedded_svc::{http::server::Request, io::Write};
 use esp_idf_svc::http::server::{Configuration, EspHttpConnection, EspHttpServer};
 use std::fs;
 use std::fs::FileType;
+use std::io::Read;
 use std::path::PathBuf;
 
 #[allow(dead_code)]
@@ -116,6 +118,31 @@ impl<'d> HttpServer<'d> {
         html.push_str("</div>");
         Self::general_failed_html(html.as_str())
     }
+
+    fn generate_file_content_html(
+        current_path: &str,
+        mut response: Response<&mut EspHttpConnection>,
+    ) -> anyhow::Result<()> {
+        response.write_all(b"<html><head><meta charset='utf-8'></head><body>")?;
+        response.write_all(format!("<h3>file content: {}</h3>", current_path).as_bytes())?;
+        response.write_all("<a href='..' class='btn'>[ ⬅️ return ]</a>".as_bytes())?;
+
+        let mut file = fs::File::open(current_path)?;
+        let mut buf = [0_u8; 256];
+
+        loop {
+            let n = file.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            response.write_all(&buf[..n])?;
+        }
+
+        response.write_all(b"</pre></body></html>")?;
+
+        Ok(())
+    }
+
     /// 处理文件列表请求的回调函数
     pub fn list_directory_handler(req: Request<&mut EspHttpConnection>) -> anyhow::Result<()> {
         let mut uri = req.uri().to_string();
@@ -131,19 +158,24 @@ impl<'d> HttpServer<'d> {
 
         log::info!("Handling request for path: {}", uri);
         let mut response = req.into_ok_response()?;
-        let response_str = match Self::get_dir_contents_with_path(&uri) {
-            Ok(path_vec) => Self::generate_dir_file_html(uri.as_str(), &path_vec),
+        match Self::get_dir_contents_with_path(&uri) {
+            Ok(path_vec) => {
+                response
+                    .write_all(Self::generate_dir_file_html(uri.as_str(), &path_vec).as_bytes())?;
+            }
             Err(e) => {
                 // 简单判断, 如果打开的是文件就读取文件内容
                 if e.to_string().contains("is_file: true") {
                     log::info!("access file");
-                    String::new()
+                    Self::generate_file_content_html(&uri, response)?
                 } else {
-                    Self::generate_dir_file_failed_html(uri.as_str(), format!("{}", e).as_str())
+                    response.write_all(
+                        Self::generate_dir_file_failed_html(uri.as_str(), e.to_string().as_str())
+                            .as_ref(),
+                    )?;
                 }
             }
         };
-        response.write_all(response_str.as_bytes())?;
         Ok(())
     }
 }
