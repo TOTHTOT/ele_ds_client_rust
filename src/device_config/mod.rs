@@ -57,7 +57,7 @@ impl Default for DeviceConfig {
 impl DeviceConfig {
     /// 加载配置
     pub fn load_config() -> anyhow::Result<DeviceConfig> {
-        Self::delete_config_file()?;
+        // Self::delete_config_file()?;
         let config_string = match fs::read_to_string(DEFAULT_DEVICE_CONFIG_FILE_PATH) {
             Ok(string) => string,
             Err(e) => {
