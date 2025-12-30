@@ -4,8 +4,8 @@ use embedded_svc::{http::server::Request, io::Write};
 use esp_idf_svc::http::server::{Configuration, EspHttpConnection, EspHttpServer};
 use std::fs;
 use std::fs::FileType;
-use std::io::Read;
-use std::path::PathBuf;
+use std::io::{Read, Write as StdWrite};
+use std::path::{Path, PathBuf};
 
 #[allow(dead_code)]
 pub struct HttpServer<'d> {
@@ -23,6 +23,7 @@ impl<'d> HttpServer<'d> {
         server.fn_handler("/fat*", Method::Get, |req| {
             Self::list_directory_handler(req)
         })?;
+        server.fn_handler("/fat*", Method::Put, |req| Self::deal_put_file_handler(req))?;
         Ok(Self { server })
     }
 
@@ -143,7 +144,7 @@ impl<'d> HttpServer<'d> {
     }
 
     /// 处理文件列表请求的回调函数
-    pub fn list_directory_handler(req: Request<&mut EspHttpConnection>) -> anyhow::Result<()> {
+    fn list_directory_handler(req: Request<&mut EspHttpConnection>) -> anyhow::Result<()> {
         let mut uri = req.uri().to_string();
         // 如果字符串是空的或者只有一个 / 就补全目录, 有的浏览器在没输入路径时自动传入 /
         if uri.is_empty() {
@@ -175,6 +176,30 @@ impl<'d> HttpServer<'d> {
                 }
             }
         };
+        Ok(())
+    }
+
+    /// 上传文件功能, 会直接覆覆盖原先的文件
+    fn deal_put_file_handler(mut req: Request<&mut EspHttpConnection>) -> anyhow::Result<()> {
+        let uri = req.uri();
+        log::info!("uri: {}", uri);
+        if let Some(parent_path) = Path::new(uri).parent() {
+            log::info!("parent path: {:?}", parent_path);
+            fs::create_dir_all(parent_path)?;
+            let mut buf = [0_u8; 512];
+            let mut file = fs::File::create(&uri)?;
+            loop {
+                if let Ok(read_result) = req.read(&mut buf) {
+                    if read_result == 0 {
+                        break;
+                    }
+                    file.write_all(buf[..read_result].as_ref())?;
+                }
+            }
+        };
+
+        let mut response = req.into_ok_response()?;
+        response.write_all("".as_bytes())?;
         Ok(())
     }
 }

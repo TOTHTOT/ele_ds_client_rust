@@ -22,51 +22,56 @@
     espflash erase-flash
     ```
   
-  - 重新监控串口
-    ```shell
-    espflash monitor --port /dev/ttyUSB0
-    ```
+- 重新监控串口
+  ```shell
+  espflash monitor --port /dev/ttyUSB0
+  ```
   
-    - 使用内容的psram
-      - 配置好了psram但是由于电压错误导致不能正确和psram通信, 这是由于efuse配置问题导致的, 电压锁死3.3V但是目标是1.8V, 现在由于硬件情况不能使用psram了.
-      ```shell
-      # 读取efuse参数
-      espefuse.py summary --port /dev/ttyUSB1
-      ```
-      ```text
-      #
-      # ESP PSRAM
-      #
-      CONFIG_SPIRAM=y
+- 使用内容的psram
+  - 配置好了psram但是由于电压错误导致不能正确和psram通信, 这是由于efuse配置问题导致的, 电压锁死3.3V但是目标是1.8V, 现在由于硬件情况不能使用psram了.
+  ```shell
+  # 读取efuse参数
+  espefuse.py summary --port /dev/ttyUSB1
+  ```
+  ```text
+  #
+  # ESP PSRAM
+  #
+  CONFIG_SPIRAM=y
     
-      #
-      # SPI RAM config
-      #
-      # CONFIG_SPIRAM_MODE_QUAD is not set
-      CONFIG_SPIRAM_MODE_OCT=y
-      CONFIG_SPIRAM_TYPE_AUTO=y
-      # CONFIG_SPIRAM_TYPE_ESPPSRAM64 is not set
-      CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY=y
-      CONFIG_SPIRAM_CLK_IO=30
-      CONFIG_SPIRAM_CS_IO=26
-      # CONFIG_SPIRAM_XIP_FROM_PSRAM is not set
-      # CONFIG_SPIRAM_FETCH_INSTRUCTIONS is not set
-      # CONFIG_SPIRAM_RODATA is not set
-      # CONFIG_SPIRAM_SPEED_80M is not set
-      CONFIG_SPIRAM_SPEED_40M=y
-      CONFIG_SPIRAM_SPEED=40
-      # CONFIG_SPIRAM_ECC_ENABLE is not set
-      CONFIG_SPIRAM_BOOT_INIT=y
-      # CONFIG_SPIRAM_IGNORE_NOTFOUND is not set
-      # CONFIG_SPIRAM_USE_MEMMAP is not set
-      # CONFIG_SPIRAM_USE_CAPS_ALLOC is not set
-      CONFIG_SPIRAM_USE_MALLOC=y
-      # CONFIG_SPIRAM_MEMTEST is not set
-      CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
-      # CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP is not set
-      CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=32768
-      # CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY is not set
-      # CONFIG_SPIRAM_ALLOW_NOINIT_SEG_EXTERNAL_MEMORY is not set
-      # end of SPI RAM config
-      # end of ESP PSRAM
-      ```
+  #
+  # SPI RAM config
+  #
+  # CONFIG_SPIRAM_MODE_QUAD is not set
+  CONFIG_SPIRAM_MODE_OCT=y
+  CONFIG_SPIRAM_TYPE_AUTO=y
+  # CONFIG_SPIRAM_TYPE_ESPPSRAM64 is not set
+  CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY=y
+  CONFIG_SPIRAM_CLK_IO=30
+  CONFIG_SPIRAM_CS_IO=26
+  # CONFIG_SPIRAM_XIP_FROM_PSRAM is not set
+  # CONFIG_SPIRAM_FETCH_INSTRUCTIONS is not set
+  # CONFIG_SPIRAM_RODATA is not set
+  # CONFIG_SPIRAM_SPEED_80M is not set
+  CONFIG_SPIRAM_SPEED_40M=y
+  CONFIG_SPIRAM_SPEED=40
+  # CONFIG_SPIRAM_ECC_ENABLE is not set
+  CONFIG_SPIRAM_BOOT_INIT=y
+  # CONFIG_SPIRAM_IGNORE_NOTFOUND is not set
+  # CONFIG_SPIRAM_USE_MEMMAP is not set
+  # CONFIG_SPIRAM_USE_CAPS_ALLOC is not set
+  CONFIG_SPIRAM_USE_MALLOC=y
+  # CONFIG_SPIRAM_MEMTEST is not set
+  CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
+  # CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP is not set
+  CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=32768
+  # CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY is not set
+  # CONFIG_SPIRAM_ALLOW_NOINIT_SEG_EXTERNAL_MEMORY is not set
+  # end of SPI RAM config
+  # end of ESP PSRAM
+  ```
+    
+- 使用PUT上传文件, 会直接覆盖原先文件!!!
+  ```shell
+  curl -X PUT --data-binary "@src/main.rs" http://10.22.110.117/fat/A/B/C/new_file.txt
+  ```
