@@ -1,11 +1,11 @@
 // src/lib.rs
 
+pub mod board;
 pub mod cmd_menu;
 pub mod communication;
-pub mod power_manage;
-pub mod file_system;
 pub mod device_config;
-pub mod board;
+pub mod file_system;
+pub mod power_manage;
 
 pub const SERVER_CERT: &str = "-----BEGIN CERTIFICATE-----\n\
 MIIDYjCCAkqgAwIBAgIUW8aMRyWSarT0jjgQTlHzlRbtVQEwDQYJKoZIhvcNAQEL\n\

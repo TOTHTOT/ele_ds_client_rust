@@ -1,7 +1,7 @@
-use std::ffi::CString;
-use std::io::{Read, Write};
-use std::fs;
 use esp_idf_svc::sys::*;
+use std::ffi::CString;
+use std::fs;
+use std::io::{Read, Write};
 
 pub fn nvs_flash_filesystem_init() -> anyhow::Result<()> {
     let mut first_init = false;

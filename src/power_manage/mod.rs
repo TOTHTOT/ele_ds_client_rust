@@ -22,7 +22,7 @@ pub fn enter_light_sleep_mode() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn enter_deep_sleep_mode () {
+pub fn enter_deep_sleep_mode() {
     let wakeup_time_us = 10 * 1000 * 1000;
     unsafe {
         log::info!("sleeping for {} us", wakeup_time_us);

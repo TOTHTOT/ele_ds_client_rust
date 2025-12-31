@@ -63,7 +63,8 @@ impl DeviceConfig {
             Err(e) => {
                 log::info!("load_config failed: {e}");
 
-                if let Some(parent) = std::path::Path::new(DEFAULT_DEVICE_CONFIG_FILE_PATH).parent() {
+                if let Some(parent) = std::path::Path::new(DEFAULT_DEVICE_CONFIG_FILE_PATH).parent()
+                {
                     fs::create_dir_all(parent)?;
                 }
 
@@ -89,7 +90,10 @@ impl DeviceConfig {
             .open(DEFAULT_DEVICE_CONFIG_FILE_PATH)?;
 
         file.write_all(config_string.as_bytes())?;
-        log::info!("config file has beed saved to: {}", DEFAULT_DEVICE_CONFIG_FILE_PATH);
+        log::info!(
+            "config file has beed saved to: {}",
+            DEFAULT_DEVICE_CONFIG_FILE_PATH
+        );
         Ok(())
     }
 
