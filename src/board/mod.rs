@@ -3,13 +3,26 @@ mod psram;
 use crate::communication::http_server::HttpServer;
 use crate::device_config::DeviceConfig;
 use crate::file_system::nvs_flash_filesystem_init;
+use display_interface_spi::SPIInterface;
+// use embedded_graphics::geometry::Point;
+// use embedded_graphics::mono_font::MonoTextStyle;
+// use embedded_graphics::text::{Text, TextStyle};
+// use embedded_graphics::Drawable;
+use embedded_hal_bus::spi::ExclusiveDevice;
 use embedded_svc::wifi;
 use embedded_svc::wifi::AuthMethod;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
+use esp_idf_svc::hal;
+use esp_idf_svc::hal::delay::Ets;
+use esp_idf_svc::hal::gpio::{AnyIOPin, PinDriver};
 use esp_idf_svc::hal::peripherals::Peripherals;
+use esp_idf_svc::hal::spi::{SpiBusDriver, SpiDeviceDriver, SpiDriver, SpiDriverConfig};
 use esp_idf_svc::nvs::{EspNvsPartition, NvsDefault};
 use esp_idf_svc::wifi::EspWifi;
+use profont::PROFONT_24_POINT;
 use std::str::FromStr;
+use weact_studio_epd::graphics::{Display290BlackWhite, DisplayRotation};
+use weact_studio_epd::{Color, WeActStudio290BlackWhiteDriver};
 
 #[allow(dead_code)]
 pub struct BoardPeripherals<'d> {
@@ -26,14 +39,52 @@ impl<'d> BoardPeripherals<'d> {
 
         let device_config = BoardPeripherals::init_filesystem_load_config()?;
 
-        /*let driver_config = Default::default();
-        let spi_drv = SpiDriver::new(
-            peripherals.spi2,
-            peripherals.pins.gpio12,
-            peripherals.pins.gpio11,
-            None::<Gpio0>,
-            &driver_config,
-        )?;*/
+        let rst = PinDriver::output(peripherals.pins.gpio6)?;
+        let dc = PinDriver::output(peripherals.pins.gpio7)?;
+        let busy = PinDriver::input(peripherals.pins.gpio16)?;
+        let delay = Ets;
+
+        let sclk = peripherals.pins.gpio4;
+        let sdo = peripherals.pins.gpio5;
+        let cs = PinDriver::output(peripherals.pins.gpio15)?;
+
+        // let spi_bus = SpiBusDriver::new()
+        // let spi = SpiDriver::new(
+        //     peripherals.spi2,
+        //     sclk,
+        //     sdo,
+        //     None::<AnyIOPin>,
+        //     &SpiDriverConfig::default(),
+        // )?;
+        // let spi = SpiDeviceDriver::new(
+        //     spi,
+        //     None, &hal::spi::config::Config::new(),
+        // )?;
+        // log::info!("Initializing SPI Device...");
+        // let spi_device = ExclusiveDevice::new(spi, cs, delay).expect("SPI device initialize error");
+        // let spi_interface = SPIInterface::new(spi_device, dc);
+        // let spi_bus = Spi
+        // Setup EPD
+        log::info!("Intializing EPD...");
+        // let mut driver = WeActStudio290BlackWhiteDriver::new(spi_interface, busy, rst, Ets);
+        // let mut display = Display290BlackWhite::new();
+        // display.set_rotation(DisplayRotation::Rotate90);
+        // driver.init().unwrap();
+        //
+        // let style = MonoTextStyle::new(&PROFONT_24_POINT, Color::Black);
+        // let _ = Text::with_text_style(
+        //     "Hello World!",
+        //     Point::new(8, 68),
+        //     style,
+        //     TextStyle::default(),
+        // )
+        // .draw(&mut display);
+        //
+        // driver.full_update(&display).unwrap();
+        //
+        // log::info!("Sleeping for 5s...");
+        // driver.sleep().unwrap();
+        // std::thread::sleep(std::time::Duration::from_secs(5));
 
         let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
         if let Some(ssid) = device_config.wifi_ssid.as_ref().take() {

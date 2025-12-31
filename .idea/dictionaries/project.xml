@@ -3,6 +3,7 @@
     <words>
       <w>netif</w>
       <w>psram</w>
+      <w>sclk</w>
       <w>sysloop</w>
     </words>
   </dictionary>
