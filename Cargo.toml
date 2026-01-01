@@ -39,7 +39,8 @@ esp-idf-sys = "0.36"
 
 # a) Standalone Embassy libs ( embassy-time, embassy-sync etc.) with a foreign async runtime:
  embassy-time = { version = "0.4.0", features = ["generic-queue-8"] } # NOTE: any generic-queue variant will work
-
+ssd1680 = {path = "src/ssd1680"}
+embedded-graphics = "0.8.1"
 # b) With embassy-executor:
 # embassy-executor = { version = "0.7", features = ["executor-thread", "arch-std"] }
 
