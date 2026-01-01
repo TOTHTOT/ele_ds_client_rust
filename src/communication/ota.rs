@@ -95,11 +95,7 @@ impl Ota {
         let remote_time = NaiveDateTime::parse_from_str(&version_str, format)
             .expect("Failed to parse remote version time");
         log::info!("build_time: {build_time}, remote_time: {remote_time}");
-        if remote_time > build_time {
-            true
-        } else {
-            false
-        }
+        remote_time > build_time
     }
 
     /// 同步服务器版本
@@ -108,7 +104,7 @@ impl Ota {
         match is_need_upgrade {
             Ok(t) => {
                 if t.is_some() {
-                    log::info!("System need upgrade, {:?}", t);
+                    log::info!("System need upgrade, {t:?}");
                     self.get_upgrade_file(&t.unwrap())?;
                 } else {
                     log::info!("System is last");
@@ -116,7 +112,7 @@ impl Ota {
                 Ok(())
             }
             Err(e) => {
-                log::error!("{}", e);
+                log::error!("{e}");
                 Err(e)
             }
         }

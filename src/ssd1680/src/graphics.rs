@@ -118,7 +118,7 @@ impl DisplayAnyIn {
     /// Create a black & white display buffer
     pub fn bw(width: u16, height: u16) -> Self {
         let len = buffer_len(width as usize, height as usize);
-        let mut buffer = vec![Color::White.get_byte_value(); len];
+        let buffer = vec![Color::White.get_byte_value(); len];
         DisplayAnyIn {
             width,
             height,
@@ -131,7 +131,7 @@ impl DisplayAnyIn {
     /// Create a red display buffer
     pub fn red(width: u16, height: u16) -> Self {
         let len = buffer_len(width as usize, height as usize);
-        let mut buffer = vec![Color::White.get_byte_value(); len];
+        let buffer = vec![Color::White.get_byte_value(); len];
         DisplayAnyIn {
             width,
             height,

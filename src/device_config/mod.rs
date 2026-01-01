@@ -90,10 +90,7 @@ impl DeviceConfig {
             .open(DEFAULT_DEVICE_CONFIG_FILE_PATH)?;
 
         file.write_all(config_string.as_bytes())?;
-        log::info!(
-            "config file has beed saved to: {}",
-            DEFAULT_DEVICE_CONFIG_FILE_PATH
-        );
+        log::info!("config file has beed saved to: {DEFAULT_DEVICE_CONFIG_FILE_PATH}");
         Ok(())
     }
 

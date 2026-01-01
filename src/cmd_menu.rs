@@ -82,7 +82,7 @@ pub fn init_cmd() -> anyhow::Result<()> {
         log::info!("shell start");
         println!("\nESP32 Shell Tool Ready (WDT disabled for this thread)");
         print!("> ");
-        let _ = io::stdout().flush().unwrap();
+        io::stdout().flush().unwrap();
 
         loop {
             let mut byte = [0u8; 1];

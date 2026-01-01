@@ -82,7 +82,7 @@ impl EleDsHttpClient {
         };
 
         let connection = EspHttpConnection::new(&config)
-            .map_err(|e| anyhow::anyhow!("Connection init failed: {:?}", e))?;
+            .map_err(|e| anyhow::anyhow!("Connection init failed: {e:?}"))?;
 
         let client = Client::wrap(connection);
 
@@ -108,14 +108,14 @@ impl EleDsHttpClient {
 
         let headers = [("content-type", "application/json")];
         let url = format!("{}{}", self.server_address, path);
-        log::info!("posting to {}", url);
+        log::info!("posting to {url}");
         let mut request = self.client.post(url.as_str(), &headers)?;
         request.write_all(request_str.as_bytes())?;
         request.flush()?;
         let mut response = request.submit()?;
 
         let status = response.status();
-        log::info!("status: {}", status);
+        log::info!("status: {status}");
 
         // 读取任意长度数据并保存到 recv_vec
         let mut recv_vec = Vec::new();
@@ -139,7 +139,7 @@ impl EleDsHttpClient {
         F: FnMut(Response<&mut EspHttpConnection>) -> anyhow::Result<()>,
     {
         let url = format!("{}/{}", self.server_address, path);
-        log::info!("Start download file from: {}", url);
+        log::info!("Start download file from: {url}");
 
         let request = self.client.get(url.as_str())?;
 
@@ -149,7 +149,7 @@ impl EleDsHttpClient {
         if status != 200 {
             anyhow::bail!("get file failed: {status}");
         }
-        log::info!("status: {}", status);
+        log::info!("status: {status}");
         handle(response)?;
         log::info!("handle response success");
         Ok(())

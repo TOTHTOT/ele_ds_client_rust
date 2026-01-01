@@ -3,7 +3,7 @@ use esp_idf_svc::sys::*;
 pub fn enter_light_sleep_mode() -> anyhow::Result<()> {
     let wakeup_time_us = 10 * 1000 * 1000;
     unsafe {
-        log::info!("sleeping for {} us", wakeup_time_us);
+        log::info!("sleeping for {wakeup_time_us} us");
         esp_sleep_enable_timer_wakeup(wakeup_time_us);
 
         // 可选：设置 RTC GPIO 唤醒
@@ -18,14 +18,14 @@ pub fn enter_light_sleep_mode() -> anyhow::Result<()> {
     let end_us = unsafe { esp_timer_get_time() };
     let actual_sleep_ms = (end_us - start_us) / 1000;
 
-    log::info!("wakeup sleep time: {} ms", actual_sleep_ms);
+    log::info!("wakeup sleep time: {actual_sleep_ms} ms");
     Ok(())
 }
 
 pub fn enter_deep_sleep_mode() {
     let wakeup_time_us = 10 * 1000 * 1000;
     unsafe {
-        log::info!("sleeping for {} us", wakeup_time_us);
+        log::info!("sleeping for {wakeup_time_us} us");
         esp_sleep_enable_timer_wakeup(wakeup_time_us);
 
         // 可选：设置 RTC GPIO 唤醒

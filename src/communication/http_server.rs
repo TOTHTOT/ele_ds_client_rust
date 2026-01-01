@@ -20,10 +20,8 @@ impl<'d> HttpServer<'d> {
             ..Default::default()
         };
         let mut server = EspHttpServer::new(&config)?;
-        server.fn_handler("/fat*", Method::Get, |req| {
-            Self::list_directory_handler(req)
-        })?;
-        server.fn_handler("/fat*", Method::Put, |req| Self::deal_put_file_handler(req))?;
+        server.fn_handler("/fat*", Method::Get, Self::list_directory_handler)?;
+        server.fn_handler("/fat*", Method::Put, Self::deal_put_file_handler)?;
         Ok(Self { server })
     }
 
@@ -36,7 +34,7 @@ impl<'d> HttpServer<'d> {
         // 如果不是文件夹就直接返回文件类型
         if !metadata.is_dir() {
             let actual_type = metadata.file_type();
-            anyhow::bail!("{:?}", actual_type);
+            anyhow::bail!("{actual_type:?}");
         }
 
         let entries = fs::read_dir(&path_buf)?;
@@ -48,10 +46,10 @@ impl<'d> HttpServer<'d> {
                 let f_type = metadata.file_type();
                 path_vec.push((path, f_type));
             } else {
-                log::warn!("Could not get metadata for {:?}", path);
+                log::warn!("Could not get metadata for {path:?}");
             }
         }
-        log::info!("{path}: {:?}", path_vec);
+        log::info!("{path}: {path_vec:?}");
         Ok(path_vec)
     }
 
@@ -61,7 +59,7 @@ impl<'d> HttpServer<'d> {
         html.push_str(
             "<html><head><meta charset='utf-8'><title>ESP32 File Server</title></head><body>",
         );
-        html.push_str(&format!("<h1>current direct: {}</h1>", current_path));
+        html.push_str(&format!("<h1>current direct: {current_path}</h1>"));
 
         if current_path != "/fat/" {
             html.push_str("<p><a href='..'>[ ⬅️ return ]</a></p>");
@@ -73,15 +71,14 @@ impl<'d> HttpServer<'d> {
                 let icon = if f_type.is_dir() { "📁" } else { "📄" };
 
                 let link_name = if path.is_dir() {
-                    format!("{}{}/", current_path, file_name)
+                    format!("{current_path}{file_name}/")
                 } else {
-                    format!("{}{}", current_path, file_name)
+                    format!("{current_path}{file_name}")
                 };
                 log::info!("link_name: {link_name}");
 
                 html.push_str(&format!(
-                    "<li>{} <a href='{}'>{}</a></li>",
-                    icon, link_name, file_name
+                    "<li>{icon} <a href='{link_name}'>{file_name}</a></li>"
                 ));
             }
         }
@@ -114,8 +111,8 @@ impl<'d> HttpServer<'d> {
         let mut html = String::new();
         html.push_str("<h1>⚠️ Read path failed</h1>");
         html.push_str("<div class='error-box'>");
-        html.push_str(&format!("<p><strong>Path:</strong> {}</p>", current_path));
-        html.push_str(&format!("<p><strong>Reason:</strong> {}</p>", error_msg));
+        html.push_str(&format!("<p><strong>Path:</strong> {current_path}</p>"));
+        html.push_str(&format!("<p><strong>Reason:</strong> {error_msg}</p>"));
         html.push_str("</div>");
         Self::general_failed_html(html.as_str())
     }
@@ -125,7 +122,7 @@ impl<'d> HttpServer<'d> {
         mut response: Response<&mut EspHttpConnection>,
     ) -> anyhow::Result<()> {
         response.write_all(b"<html><head><meta charset='utf-8'></head><body>")?;
-        response.write_all(format!("<h3>file content: {}</h3>", current_path).as_bytes())?;
+        response.write_all(format!("<h3>file content: {current_path}</h3>").as_bytes())?;
         response.write_all("<a href='.' class='btn'>[ ⬅️ return ]</a><br><br>".as_bytes())?;
 
         let mut file = fs::File::open(current_path)?;
@@ -147,16 +144,14 @@ impl<'d> HttpServer<'d> {
     fn list_directory_handler(req: Request<&mut EspHttpConnection>) -> anyhow::Result<()> {
         let mut uri = req.uri().to_string();
         // 如果字符串是空的或者只有一个 / 就补全目录, 有的浏览器在没输入路径时自动传入 /
-        if uri.is_empty() {
-            uri = "/fat/".to_string();
-        } else if uri == "/" {
+        if uri.is_empty() || uri == "/" {
             uri = "/fat/".to_string();
         }
         if !uri.ends_with('/') {
             uri.push('/');
         }
 
-        log::info!("Handling request for path: {}", uri);
+        log::info!("Handling request for path: {uri}");
         let mut response = req.into_ok_response()?;
         match Self::get_dir_contents_with_path(&uri) {
             Ok(path_vec) => {
@@ -182,12 +177,12 @@ impl<'d> HttpServer<'d> {
     /// 上传文件功能, 会直接覆覆盖原先的文件
     fn deal_put_file_handler(mut req: Request<&mut EspHttpConnection>) -> anyhow::Result<()> {
         let uri = req.uri();
-        log::info!("uri: {}", uri);
+        log::info!("uri: {uri}");
         if let Some(parent_path) = Path::new(uri).parent() {
-            log::info!("parent path: {:?}", parent_path);
+            log::info!("parent path: {parent_path:?}");
             fs::create_dir_all(parent_path)?;
             let mut buf = [0_u8; 512];
-            let mut file = fs::File::create(&uri)?;
+            let mut file = fs::File::create(uri)?;
             loop {
                 if let Ok(read_result) = req.read(&mut buf) {
                     if read_result == 0 {

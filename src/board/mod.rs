@@ -9,22 +9,33 @@ use embedded_svc::wifi;
 use embedded_svc::wifi::AuthMethod;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::delay::Ets;
-use esp_idf_svc::hal::gpio::{AnyIOPin, PinDriver};
+use esp_idf_svc::hal::gpio::{AnyIOPin, Gpio16, Gpio6, Gpio7, Input, Output, PinDriver};
 use esp_idf_svc::hal::peripherals::Peripherals;
 use esp_idf_svc::hal::spi;
 use esp_idf_svc::hal::spi::{SpiDeviceDriver, SpiDriver, SpiDriverConfig};
 use esp_idf_svc::nvs::{EspNvsPartition, NvsDefault};
 use esp_idf_svc::wifi::EspWifi;
-use ssd1680::color::{Black, Red};
+use ssd1680::color::Black;
 use ssd1680::prelude::{Display, DisplayAnyIn, DisplayRotation, Ssd1680};
 use std::str::FromStr;
+
+type Ssd1680Display<'d> = Ssd1680<
+    SpiDeviceDriver<'d, SpiDriver<'d>>,
+    PinDriver<'d, Gpio16, Input>, // BUSY
+    PinDriver<'d, Gpio7, Output>, // DC
+    PinDriver<'d, Gpio6, Output>, // RST
+>;
 
 #[allow(dead_code)]
 pub struct BoardPeripherals<'d> {
     wifi: EspWifi<'d>,
     http_server: HttpServer<'d>,
     device_config: DeviceConfig,
+    bw_buf: DisplayAnyIn,
+    ssd1680: Ssd1680Display<'d>,
+    delay: Ets,
 }
+#[allow(dead_code)]
 impl<'d> BoardPeripherals<'d> {
     pub fn new() -> anyhow::Result<BoardPeripherals<'d>> {
         let peripherals = Peripherals::take()?;
@@ -51,35 +62,19 @@ impl<'d> BoardPeripherals<'d> {
             &SpiDriverConfig::default(),
         )?;
 
-        let mut spi = SpiDeviceDriver::new(spi, Some(cs), &spi::config::Config::new())?;
+        let spi = SpiDeviceDriver::new(spi, Some(cs), &spi::config::Config::new())?;
 
         let mut delay = Ets;
-        let mut ssd1680 = Ssd1680::new(&mut spi, busy, dc, rst, &mut delay, 128, 296).unwrap();
-        ssd1680.clear_bw_frame().unwrap();
-        let mut display_bw = DisplayAnyIn::bw(128, 296);
-        display_bw.set_rotation(DisplayRotation::Rotate270);
-        Rectangle::new(Point::new(0, 20), Size::new(40, 40))
-            .into_styled(PrimitiveStyle::with_fill(Black))
-            .draw(&mut display_bw)
-            .unwrap();
-
-        Circle::new(Point::new(80, 80), 40)
-            .into_styled(PrimitiveStyle::with_fill(Black))
-            .draw(&mut display_bw)
-            .unwrap();
-        log::info!("Send bw frame to display");
-        ssd1680.update_bw_frame(display_bw.buffer()).unwrap();
-        ssd1680.display_frame(&mut delay).unwrap();
-
+        let ssd1680 = Ssd1680::new(spi, busy, dc, rst, &mut delay, 128, 296).unwrap();
+        let display_bw = DisplayAnyIn::bw(128, 296);
         let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
-        if let Some(ssid) = device_config.wifi_ssid.as_ref().take() {
+        if let Some(ssid) = device_config.wifi_ssid.as_ref() {
             Self::wifi_connect(
                 &mut wifi,
                 ssid,
                 device_config
                     .wifi_password
                     .as_ref()
-                    .take()
                     .expect("get wifi_password failed"),
             )?;
         }
@@ -88,13 +83,16 @@ impl<'d> BoardPeripherals<'d> {
             wifi,
             http_server,
             device_config,
+            bw_buf: display_bw,
+            ssd1680,
+            delay,
         })
     }
 
     fn init_filesystem_load_config() -> anyhow::Result<DeviceConfig> {
         nvs_flash_filesystem_init()?;
         let device_config = DeviceConfig::load_config()?;
-        log::info!("device config: {:?}", device_config);
+        log::info!("device config: {device_config:?}");
         Ok(device_config)
     }
     pub fn wifi_connect(wifi: &mut EspWifi, ssid: &str, password: &str) -> anyhow::Result<()> {
@@ -125,5 +123,24 @@ impl<'d> BoardPeripherals<'d> {
             }
         }
         anyhow::bail!("WiFi connect failed");
+    }
+
+    pub fn test_epd_display(&mut self) -> anyhow::Result<()> {
+        self.ssd1680.clear_bw_frame().unwrap();
+
+        self.bw_buf.set_rotation(DisplayRotation::Rotate270);
+        Rectangle::new(Point::new(0, 20), Size::new(40, 40))
+            .into_styled(PrimitiveStyle::with_fill(Black))
+            .draw(&mut self.bw_buf)
+            .unwrap();
+
+        Circle::new(Point::new(80, 80), 40)
+            .into_styled(PrimitiveStyle::with_fill(Black))
+            .draw(&mut self.bw_buf)
+            .unwrap();
+        log::info!("Send bw frame to display");
+        self.ssd1680.update_bw_frame(self.bw_buf.buffer()).unwrap();
+        self.ssd1680.display_frame(&mut self.delay).unwrap();
+        Ok(())
     }
 }

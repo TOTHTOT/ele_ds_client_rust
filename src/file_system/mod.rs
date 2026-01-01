@@ -42,7 +42,7 @@ pub fn nvs_flash_filesystem_init() -> anyhow::Result<()> {
     };
 
     if res != esp_idf_svc::sys::ESP_OK {
-        log::error!("esp_vfs_fat_spiflash_mount failed: {}", res);
+        log::error!("esp_vfs_fat_spiflash_mount failed: {res}");
         return Err(anyhow::anyhow!(res));
     }
     log::info!("FAT mounted at /fat");
@@ -57,6 +57,7 @@ fn test_fs_rw() -> anyhow::Result<()> {
     {
         let mut f = fs::OpenOptions::new()
             .create(true)
+            .truncate(true)
             .write(true)
             .open(path)
             .expect("create file failed");
@@ -65,6 +66,6 @@ fn test_fs_rw() -> anyhow::Result<()> {
     let mut s = String::new();
     let mut f = std::fs::File::open(path)?;
     f.read_to_string(&mut s)?;
-    log::info!("file content: {}", s);
+    log::info!("file content: {s}");
     Ok(())
 }

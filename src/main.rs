@@ -9,8 +9,8 @@ fn main() -> anyhow::Result<()> {
     // Bind the log crate to the ESP Logging facilities
     esp_idf_svc::log::EspLogger::initialize_default();
     log::info!("system start, build info: {} 12", env!("BUILD_TIME"));
-    let _board = BoardPeripherals::new()?;
-
+    let mut board = BoardPeripherals::new()?;
+    board.test_epd_display()?;
     loop {
         std::thread::sleep(std::time::Duration::from_secs(1));
         // ele_ds_client_rust::power_manage::enter_deep_sleep_mode();
@@ -18,6 +18,7 @@ fn main() -> anyhow::Result<()> {
 }
 
 /// wifi 连接成功要做的一些内容
+#[allow(clippy::arc_with_non_send_sync)]
 pub fn after_wifi_established() -> anyhow::Result<()> {
     // 创建http客户端
     let client = Arc::new(Mutex::new(http_client::EleDsHttpClient::new(
@@ -28,10 +29,10 @@ pub fn after_wifi_established() -> anyhow::Result<()> {
     match ota {
         Ok(ota) => {
             if let Err(e) = ota.sync_firmware() {
-                log::error!("sync_firmware failed: {}", e);
+                log::error!("sync_firmware failed: {e}");
             }
         }
-        Err(e) => log::warn!("create ota failed, {:?}", e),
+        Err(e) => log::warn!("create ota failed, {e:?}"),
     }
     Ok(())
 }
