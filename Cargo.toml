@@ -41,6 +41,8 @@ esp-idf-sys = "0.36"
  embassy-time = { version = "0.4.0", features = ["generic-queue-8"] } # NOTE: any generic-queue variant will work
 ssd1680 = {path = "src/ssd1680"}
 embedded-graphics = "0.8.1"
+mousefood = "0.2.1"
+
 # b) With embassy-executor:
 # embassy-executor = { version = "0.7", features = ["executor-thread", "arch-std"] }
 

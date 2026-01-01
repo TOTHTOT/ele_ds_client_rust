@@ -165,7 +165,7 @@ impl OriginDimensions for DisplayAnyIn {
                 Size::new(self.width.into(), self.height.into())
             }
             DisplayRotation::Rotate90 | DisplayRotation::Rotate270 => {
-                Size::new(self.width.into(), self.height.into())
+                Size::new(self.height.into(), self.width.into())
             }
         }
     }

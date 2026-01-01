@@ -1,8 +1,10 @@
+use ele_ds_client_rust::ui::home_page::mouse_food_test;
 use ele_ds_client_rust::{
     board::BoardPeripherals,
     communication::{http_client, ota},
 };
 use std::sync::{Arc, Mutex};
+
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
 
@@ -10,7 +12,8 @@ fn main() -> anyhow::Result<()> {
     esp_idf_svc::log::EspLogger::initialize_default();
     log::info!("system start, build info: {} 12", env!("BUILD_TIME"));
     let mut board = BoardPeripherals::new()?;
-    board.test_epd_display()?;
+    // board.test_epd_display()?;
+    mouse_food_test(&mut board)?;
     loop {
         std::thread::sleep(std::time::Duration::from_secs(1));
         // ele_ds_client_rust::power_manage::enter_deep_sleep_mode();

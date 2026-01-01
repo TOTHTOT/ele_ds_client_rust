@@ -31,9 +31,9 @@ pub struct BoardPeripherals<'d> {
     wifi: EspWifi<'d>,
     http_server: HttpServer<'d>,
     device_config: DeviceConfig,
-    bw_buf: DisplayAnyIn,
-    ssd1680: Ssd1680Display<'d>,
-    delay: Ets,
+    pub bw_buf: DisplayAnyIn,
+    pub ssd1680: Ssd1680Display<'d>,
+    pub delay: Ets,
 }
 #[allow(dead_code)]
 impl<'d> BoardPeripherals<'d> {
@@ -66,7 +66,9 @@ impl<'d> BoardPeripherals<'d> {
 
         let mut delay = Ets;
         let ssd1680 = Ssd1680::new(spi, busy, dc, rst, &mut delay, 128, 296).unwrap();
-        let display_bw = DisplayAnyIn::bw(128, 296);
+        let mut display_bw = DisplayAnyIn::bw(128, 296);
+        display_bw.set_rotation(DisplayRotation::Rotate270);
+
         let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
         if let Some(ssid) = device_config.wifi_ssid.as_ref() {
             Self::wifi_connect(

@@ -6,6 +6,7 @@ pub mod communication;
 pub mod device_config;
 pub mod file_system;
 pub mod power_manage;
+pub mod ui;
 
 pub const SERVER_CERT: &str = "-----BEGIN CERTIFICATE-----\n\
 MIIDYjCCAkqgAwIBAgIUW8aMRyWSarT0jjgQTlHzlRbtVQEwDQYJKoZIhvcNAQEL\n\
