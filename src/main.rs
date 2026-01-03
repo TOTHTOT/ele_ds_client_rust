@@ -1,4 +1,4 @@
-use ele_ds_client_rust::ui::home_page::mouse_food_test;
+use ele_ds_client_rust::ui::mouse_food_test;
 use ele_ds_client_rust::{
     board::BoardPeripherals,
     communication::{http_client, ota},
