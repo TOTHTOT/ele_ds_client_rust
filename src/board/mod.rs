@@ -91,7 +91,7 @@ impl<'d> BoardPeripherals<'d> {
         Ok(device_config)
     }
     pub fn wifi_connect(wifi: &mut EspWifi, config: &DeviceConfig) -> anyhow::Result<()> {
-        if !config.is_need_connect_wifi() && !DeviceConfig::current_time_is_too_old(){
+        if !config.is_need_connect_wifi() && !DeviceConfig::current_time_is_too_old() {
             log::info!(
                 "Wifi config is not need connect, boot_times: {}",
                 config.boot_times
