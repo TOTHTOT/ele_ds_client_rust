@@ -16,9 +16,12 @@ fn main() -> anyhow::Result<()> {
     let mut ui_board = board.clone();
     // board.test_epd_display()?;
     mouse_food_test(&mut ui_board)?;
+    {
+        board.lock().unwrap().ssd1680.entry_sleep().unwrap();
+    }
     loop {
-        std::thread::sleep(std::time::Duration::from_secs(1));
-        // ele_ds_client_rust::power_manage::enter_deep_sleep_mode();
+        // std::thread::sleep(std::time::Duration::from_secs(1));
+        ele_ds_client_rust::power_manage::enter_deep_sleep_mode(60 * 1000 * 1000);
     }
 }
 

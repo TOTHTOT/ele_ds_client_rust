@@ -22,11 +22,10 @@ pub fn enter_light_sleep_mode() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn enter_deep_sleep_mode() {
-    let wakeup_time_us = 10 * 1000 * 1000;
+pub fn enter_deep_sleep_mode(sleep_time_us: u64) {
     unsafe {
-        log::info!("sleeping for {wakeup_time_us} us");
-        esp_sleep_enable_timer_wakeup(wakeup_time_us);
+        log::info!("sleeping for {sleep_time_us} us");
+        esp_sleep_enable_timer_wakeup(sleep_time_us);
 
         // 可选：设置 RTC GPIO 唤醒
         // esp_sleep_enable_ext0_wakeup(GPIO_NUM_1, 1); // 高电平唤醒

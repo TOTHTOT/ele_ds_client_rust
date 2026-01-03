@@ -180,6 +180,11 @@ where
         Ok(())
     }
 
+    /// entry deep sleep mode, use rst pin to wakeup
+    pub fn entry_sleep(&mut self) -> Result<(), DisplayError> {
+        self.interface.cmd_with_data(cmd::Cmd::ENTRY_DEEP_SLEEP, &[0x02])?;
+        Ok(())
+    }
     // pub fn wake_up<DELAY: DelayMs<u8>>(
     //     &mut self,
     //     spi: &mut SPI,

@@ -4,6 +4,7 @@ impl Cmd {
     pub const SW_RESET: u8 = 0x12;
     pub const DRIVER_CONTROL: u8 = 0x01;
     pub const DATA_ENTRY_MODE: u8 = 0x11;
+    pub const ENTRY_DEEP_SLEEP: u8 = 0x10;
     pub const TEMP_CONTROL: u8 = 0x18;
     pub const BORDER_WAVEFORM_CONTROL: u8 = 0x3C;
     pub const DISPLAY_UPDATE_CONTROL: u8 = 0x21;
