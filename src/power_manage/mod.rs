@@ -1,3 +1,4 @@
+use chrono::Timelike;
 use esp_idf_svc::sys::*;
 
 pub fn enter_light_sleep_mode() -> anyhow::Result<()> {
@@ -22,6 +23,25 @@ pub fn enter_light_sleep_mode() -> anyhow::Result<()> {
     Ok(())
 }
 
+pub fn enter_deep_sleep_mode_per_minute() {
+    let now = chrono::Local::now();
+
+    let seconds_to_wait = 59 - now.second();
+    let nanos_to_wait = 1_000_000_000 - now.timestamp_nanos_opt().unwrap_or(0) % 1_000_000_000;
+
+    // 转换为微秒 (us)
+    let sleep_time_us = (seconds_to_wait as u64 * 1_000_000) + (nanos_to_wait / 1_000) as u64;
+
+    log::info!(
+        "Current time: {:02}:{:02}:{:02}, aligned sleep for {} us",
+        now.hour(),
+        now.minute(),
+        now.second(),
+        sleep_time_us
+    );
+
+    enter_deep_sleep_mode(sleep_time_us);
+}
 pub fn enter_deep_sleep_mode(sleep_time_us: u64) {
     unsafe {
         log::info!("sleeping for {sleep_time_us} us");

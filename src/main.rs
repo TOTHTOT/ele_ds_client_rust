@@ -21,7 +21,8 @@ fn main() -> anyhow::Result<()> {
     }
     loop {
         // std::thread::sleep(std::time::Duration::from_secs(1));
-        ele_ds_client_rust::power_manage::enter_deep_sleep_mode(60 * 1000 * 1000);
+        board.lock().unwrap().device_config.boot_times_add()?;
+        ele_ds_client_rust::power_manage::enter_deep_sleep_mode_per_minute();
     }
 }
 

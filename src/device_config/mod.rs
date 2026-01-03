@@ -1,3 +1,4 @@
+use chrono::Datelike;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::fs::OpenOptions;
@@ -43,6 +44,8 @@ pub struct DeviceConfig {
     pub wifi_max_link_time: u8,            // wifi最大连接时间, 秒
     pub time_zone: String,                 // 时区
     pub city_name: String,                 // 所在城市地点, 获取天气
+    pub wifi_connect_interval: u32,        // WiFi 连接的电源周期间隔, 和 boot_times 一起用
+    pub boot_times: u32,                   // 重启次数
 }
 
 impl Default for DeviceConfig {
@@ -56,6 +59,8 @@ impl Default for DeviceConfig {
             wifi_max_link_time: 30,
             time_zone: "CST-8".to_string(),
             city_name: "Fuzhou".to_string(),
+            wifi_connect_interval: 60,
+            boot_times: 0,
         }
     }
 }
@@ -112,5 +117,24 @@ impl DeviceConfig {
     }
     pub fn set_user_info(&mut self, user_info: UserInfo) {
         self.user_info = user_info;
+    }
+
+    pub fn is_need_connect_wifi(&self) -> bool {
+        // 没设置间隔时间就每次都连接
+        if self.wifi_connect_interval == 0 {
+            return true;
+        }
+        self.boot_times % self.wifi_connect_interval == 0
+    }
+
+    /// 启动后增加一次启动次数并保存
+    pub fn boot_times_add(&mut self) -> anyhow::Result<()> {
+        self.boot_times += 1;
+        self.save_config()
+    }
+
+    pub fn current_time_is_too_old() -> bool {
+        let now = chrono::Local::now();
+        now.year() < 2025
     }
 }

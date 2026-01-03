@@ -31,7 +31,7 @@ type Ssd1680Display<'d> = Ssd1680<
 pub struct BoardPeripherals<'d> {
     wifi: EspWifi<'d>,
     http_server: HttpServer<'d>,
-    device_config: DeviceConfig,
+    pub device_config: DeviceConfig,
     pub bw_buf: DisplayAnyIn,
     pub ssd1680: Ssd1680Display<'d>,
     pub delay: Ets,
@@ -47,7 +47,6 @@ impl<'d> BoardPeripherals<'d> {
         let device_config = BoardPeripherals::init_filesystem_load_config()?;
 
         let spi = peripherals.spi2;
-
         let sclk = peripherals.pins.gpio4;
         let sdo = peripherals.pins.gpio5;
         let rst = PinDriver::output(peripherals.pins.gpio6)?;
@@ -71,7 +70,9 @@ impl<'d> BoardPeripherals<'d> {
         display_bw.set_rotation(DisplayRotation::Rotate270);
 
         let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
-        Self::wifi_connect(&mut wifi, &device_config)?;
+        if let Err(e) = Self::wifi_connect(&mut wifi, &device_config) {
+            log::warn!("Wifi connect error: {e:?}");
+        }
         let http_server = HttpServer::new()?;
         Ok(BoardPeripherals {
             wifi,
@@ -90,6 +91,13 @@ impl<'d> BoardPeripherals<'d> {
         Ok(device_config)
     }
     pub fn wifi_connect(wifi: &mut EspWifi, config: &DeviceConfig) -> anyhow::Result<()> {
+        if !config.is_need_connect_wifi() && !DeviceConfig::current_time_is_too_old(){
+            log::info!(
+                "Wifi config is not need connect, boot_times: {}",
+                config.boot_times
+            );
+            return Ok(());
+        }
         let ssid_str = config
             .wifi_ssid
             .as_deref()
