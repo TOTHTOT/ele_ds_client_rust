@@ -68,13 +68,13 @@ impl DeviceConfig {
             Ok(string) => string,
             Err(e) => {
                 log::info!("load_config failed: {e}");
-                return Ok(Self::rebuild_device_config()?);
+                return Self::rebuild_device_config();
             }
         };
         let config: DeviceConfig = match serde_json::from_str(&config_string) {
             Ok(config) => config,
             Err(e) => {
-                log::warn!("Parse config failed: {:?}, rebuilding...", e);
+                log::warn!("Parse config failed: {e:?}, rebuilding...");
                 Self::rebuild_device_config()?
             }
         };

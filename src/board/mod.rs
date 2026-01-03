@@ -125,7 +125,7 @@ impl<'d> BoardPeripherals<'d> {
                             config.wifi_max_link_time - i,
                             config.time_zone.as_str(),
                         ) {
-                            log::warn!("failed to set NTP time: {:?}", e);
+                            log::warn!("failed to set NTP time: {e:?}");
                         }
                         log::info!("WiFi connected IP: {:?}, total used time: {i}", ip_info.ip);
                         return Ok(());
