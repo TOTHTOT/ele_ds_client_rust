@@ -39,7 +39,10 @@ pub struct DeviceConfig {
     device_info: DeviceInfo,
     pub wifi_ssid: Option<String>,
     pub wifi_password: Option<String>,
-    requery_upgrade_time_minutes: u32, // 查询更新版本间隔, 单位: 分钟
+    pub requery_upgrade_time_minutes: u32, // 查询更新版本间隔, 单位: 分钟
+    pub wifi_max_link_time: u8,            // wifi最大连接时间, 秒
+    pub time_zone: String,                 // 时区
+    pub city_name: String,                 // 所在城市地点, 获取天气
 }
 
 impl Default for DeviceConfig {
@@ -50,6 +53,9 @@ impl Default for DeviceConfig {
             wifi_ssid: Some("esp-2.4G".to_string()),
             wifi_password: Some("12345678..".to_string()),
             requery_upgrade_time_minutes: 1440,
+            wifi_max_link_time: 30,
+            time_zone: "CST-8".to_string(),
+            city_name: "Fuzhou".to_string(),
         }
     }
 }
@@ -62,21 +68,27 @@ impl DeviceConfig {
             Ok(string) => string,
             Err(e) => {
                 log::info!("load_config failed: {e}");
-
-                if let Some(parent) = std::path::Path::new(DEFAULT_DEVICE_CONFIG_FILE_PATH).parent()
-                {
-                    fs::create_dir_all(parent)?;
-                }
-
-                let default_config = DeviceConfig::default();
-                default_config.save_config()?;
-                return Ok(default_config);
+                return Ok(Self::rebuild_device_config()?);
             }
         };
-        let config: DeviceConfig = serde_json::from_str(&config_string)?;
+        let config: DeviceConfig = match serde_json::from_str(&config_string) {
+            Ok(config) => config,
+            Err(e) => {
+                log::warn!("Parse config failed: {:?}, rebuilding...", e);
+                Self::rebuild_device_config()?
+            }
+        };
         Ok(config)
     }
+    fn rebuild_device_config() -> anyhow::Result<DeviceConfig> {
+        if let Some(parent) = std::path::Path::new(DEFAULT_DEVICE_CONFIG_FILE_PATH).parent() {
+            fs::create_dir_all(parent)?;
+        }
 
+        let default_config = DeviceConfig::default();
+        default_config.save_config()?;
+        Ok(default_config)
+    }
     /// 保存数据到文件, 这里保存的配置是格式化后的
     pub fn save_config(&self) -> anyhow::Result<()> {
         let config_string = serde_json::to_string_pretty(self)?;

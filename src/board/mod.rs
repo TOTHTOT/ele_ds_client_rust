@@ -1,3 +1,4 @@
+pub mod get_clock_ntp;
 mod psram;
 
 use crate::communication::http_server::HttpServer;
@@ -70,16 +71,7 @@ impl<'d> BoardPeripherals<'d> {
         display_bw.set_rotation(DisplayRotation::Rotate270);
 
         let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
-        if let Some(ssid) = device_config.wifi_ssid.as_ref() {
-            Self::wifi_connect(
-                &mut wifi,
-                ssid,
-                device_config
-                    .wifi_password
-                    .as_ref()
-                    .expect("get wifi_password failed"),
-            )?;
-        }
+        Self::wifi_connect(&mut wifi, &device_config)?;
         let http_server = HttpServer::new()?;
         Ok(BoardPeripherals {
             wifi,
@@ -97,11 +89,21 @@ impl<'d> BoardPeripherals<'d> {
         log::info!("device config: {device_config:?}");
         Ok(device_config)
     }
-    pub fn wifi_connect(wifi: &mut EspWifi, ssid: &str, password: &str) -> anyhow::Result<()> {
-        let ssid = heapless::String::<32>::from_str(ssid)
-            .map_err(|_| anyhow::anyhow!("ssid too long:{ssid}"))?;
-        let password = heapless::String::<64>::from_str(password)
-            .map_err(|_| anyhow::anyhow!("passwd too long:{password}"))?;
+    pub fn wifi_connect(wifi: &mut EspWifi, config: &DeviceConfig) -> anyhow::Result<()> {
+        let ssid_str = config
+            .wifi_ssid
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("get wifi name failed"))?;
+        let ssid = heapless::String::<32>::from_str(ssid_str)
+            .map_err(|_| anyhow::anyhow!("ssid too long:{ssid_str}"))?;
+
+        let password_str = config
+            .wifi_password
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("get wifi name failed"))?;
+        let password = heapless::String::<64>::from_str(password_str)
+            .map_err(|_| anyhow::anyhow!("passwd too long:{password_str}"))?;
+
         let wifi_cfg = wifi::Configuration::Client(wifi::ClientConfiguration {
             ssid,
             password,
@@ -112,12 +114,19 @@ impl<'d> BoardPeripherals<'d> {
         wifi.start()?;
         wifi.connect()?;
 
-        for i in 1..=30 {
+        for i in 1..=config.wifi_max_link_time {
             std::thread::sleep(std::time::Duration::from_secs(1));
             if wifi.is_connected()? {
                 let netif = wifi.sta_netif();
                 if let Ok(ip_info) = netif.get_ip_info() {
                     if !ip_info.ip.is_unspecified() {
+                        // 连接成功获取网络时间
+                        if let Err(e) = get_clock_ntp::set_ntp_time(
+                            config.wifi_max_link_time - i,
+                            config.time_zone.as_str(),
+                        ) {
+                            log::warn!("failed to set NTP time: {:?}", e);
+                        }
                         log::info!("WiFi connected IP: {:?}, total used time: {i}", ip_info.ip);
                         return Ok(());
                     }
