@@ -45,6 +45,7 @@ impl<'d> BoardPeripherals<'d> {
         psram::check_psram();
 
         let device_config = BoardPeripherals::init_filesystem_load_config()?;
+        get_clock_ntp::set_time_zone(device_config.time_zone.as_str())?;
 
         let spi = peripherals.spi2;
         let sclk = peripherals.pins.gpio4;
@@ -61,7 +62,6 @@ impl<'d> BoardPeripherals<'d> {
             None::<AnyIOPin>,
             &SpiDriverConfig::default(),
         )?;
-
         let spi = SpiDeviceDriver::new(spi, Some(cs), &spi::config::Config::new())?;
 
         let mut delay = Ets;
