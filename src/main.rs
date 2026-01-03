@@ -5,15 +5,17 @@ use ele_ds_client_rust::{
 };
 use std::sync::{Arc, Mutex};
 
+#[allow(clippy::arc_with_non_send_sync)]
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
 
     // Bind the log crate to the ESP Logging facilities
     esp_idf_svc::log::EspLogger::initialize_default();
     log::info!("system start, build info: {} 12", env!("BUILD_TIME"));
-    let mut board = BoardPeripherals::new()?;
+    let board = Arc::new(Mutex::new(BoardPeripherals::new()?));
+    let mut ui_board = board.clone();
     // board.test_epd_display()?;
-    mouse_food_test(&mut board)?;
+    mouse_food_test(&mut ui_board)?;
     loop {
         std::thread::sleep(std::time::Duration::from_secs(1));
         // ele_ds_client_rust::power_manage::enter_deep_sleep_mode();

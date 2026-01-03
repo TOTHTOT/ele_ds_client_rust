@@ -42,6 +42,7 @@ esp-idf-sys = "0.36"
 ssd1680 = {path = "src/ssd1680"}
 embedded-graphics = "0.8.1"
 mousefood = "0.2.1"
+tinybmp = "0.6.0"
 
 # b) With embassy-executor:
 # embassy-executor = { version = "0.7", features = ["executor-thread", "arch-std"] }
