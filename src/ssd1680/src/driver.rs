@@ -36,16 +36,17 @@ where
         Self: Sized,
     {
         let interface = DisplayInterface::new(spi, busy, dc, rst);
-        let mut ssd1680 = Ssd1680 { interface, width, height };
+        let mut ssd1680 = Ssd1680 {
+            interface,
+            width,
+            height,
+        };
         ssd1680.init(delay)?;
         Ok(ssd1680)
     }
 
     /// Initialise the controller
-    pub fn init(
-        &mut self,
-        delay: &mut impl DelayNs,
-    ) -> Result<(), DisplayError> {
+    pub fn init(&mut self, delay: &mut impl DelayNs) -> Result<(), DisplayError> {
         self.interface.reset(delay);
         self.interface.cmd(cmd::Cmd::SW_RESET)?;
         self.interface.wait_until_idle(delay);
@@ -182,7 +183,8 @@ where
 
     /// entry deep sleep mode, use rst pin to wakeup
     pub fn entry_sleep(&mut self) -> Result<(), DisplayError> {
-        self.interface.cmd_with_data(cmd::Cmd::ENTRY_DEEP_SLEEP, &[0x02])?;
+        self.interface
+            .cmd_with_data(cmd::Cmd::ENTRY_DEEP_SLEEP, &[0x02])?;
         Ok(())
     }
     // pub fn wake_up<DELAY: DelayMs<u8>>(

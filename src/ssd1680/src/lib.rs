@@ -31,10 +31,10 @@ extern crate alloc;
 pub mod color;
 pub mod driver;
 
-#[cfg(feature = "graphics")]
-pub mod graphics;
 mod cmd;
 mod flag;
+#[cfg(feature = "graphics")]
+pub mod graphics;
 
 /// Maximum display height this driver supports
 pub const MAX_HEIGHT: u16 = 296;
