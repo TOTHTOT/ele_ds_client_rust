@@ -6,11 +6,14 @@ use crate::device_config::DeviceConfig;
 use crate::file_system::nvs_flash_filesystem_init;
 use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::{Circle, PrimitiveStyle, Rectangle};
+use embedded_hal_bus::i2c::RefCellDevice;
+use embedded_sht3x::{Sht3x, DEFAULT_I2C_ADDRESS};
 use embedded_svc::wifi;
 use embedded_svc::wifi::AuthMethod;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::delay::Ets;
 use esp_idf_svc::hal::gpio::{AnyIOPin, Gpio16, Gpio6, Gpio7, Input, Output, PinDriver};
+use esp_idf_svc::hal::i2c;
 use esp_idf_svc::hal::peripherals::Peripherals;
 use esp_idf_svc::hal::spi;
 use esp_idf_svc::hal::spi::{SpiDeviceDriver, SpiDriver, SpiDriverConfig};
@@ -18,8 +21,8 @@ use esp_idf_svc::nvs::{EspNvsPartition, NvsDefault};
 use esp_idf_svc::wifi::EspWifi;
 use ssd1680::color::Black;
 use ssd1680::prelude::{Display, DisplayAnyIn, DisplayRotation, Ssd1680};
-use std::str::FromStr;
-
+use std::cell::RefCell;
+use std::str::FromStr; // 如果是单线程操作
 type Ssd1680Display<'d> = Ssd1680<
     SpiDeviceDriver<'d, SpiDriver<'d>>,
     PinDriver<'d, Gpio16, Input>, // BUSY
@@ -68,6 +71,14 @@ impl<'d> BoardPeripherals<'d> {
         let ssd1680 = Ssd1680::new(spi, busy, dc, rst, &mut delay, 128, 296).unwrap();
         let mut display_bw = DisplayAnyIn::bw(128, 296);
         display_bw.set_rotation(DisplayRotation::Rotate270);
+        let i2c_driver = i2c::I2cDriver::new(
+            peripherals.i2c0,
+            peripherals.pins.gpio8,
+            peripherals.pins.gpio18,
+            &i2c::I2cConfig::default(),
+        )?;
+        let sht3x_iic_bus = RefCell::new(i2c_driver);
+        let _sensor = Sht3x::new(RefCellDevice::new(&sht3x_iic_bus), DEFAULT_I2C_ADDRESS, Ets);
 
         let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
         if let Err(e) = Self::wifi_connect(&mut wifi, &device_config) {
