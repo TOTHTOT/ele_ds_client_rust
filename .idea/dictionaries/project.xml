@@ -2,11 +2,16 @@
   <dictionary name="project">
     <words>
       <w>clippy</w>
+      <w>deemphasis</w>
       <w>humi</w>
+      <w>lrck</w>
+      <w>mclk</w>
       <w>mousefood</w>
       <w>netif</w>
       <w>psram</w>
       <w>sysloop</w>
+      <w>vmid</w>
+      <w>vref</w>
     </words>
   </dictionary>
 </component>

@@ -1,9 +1,12 @@
+pub mod es8388;
 pub mod get_clock_ntp;
 mod psram;
 
+use crate::board::es8388::driver::Es8388;
 use crate::communication::http_server::HttpServer;
 use crate::device_config::DeviceConfig;
 use crate::file_system::nvs_flash_filesystem_init;
+use anyhow::Context;
 use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::{Circle, PrimitiveStyle, Rectangle};
 use embedded_hal_bus::i2c::RefCellDevice;
@@ -14,6 +17,7 @@ use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::delay::Ets;
 use esp_idf_svc::hal::gpio::{AnyIOPin, Gpio16, Gpio6, Gpio7, Input, Output, PinDriver};
 use esp_idf_svc::hal::i2c;
+use esp_idf_svc::hal::i2s::I2sDriver;
 use esp_idf_svc::hal::peripherals::Peripherals;
 use esp_idf_svc::hal::spi;
 use esp_idf_svc::hal::spi::{SpiDeviceDriver, SpiDriver, SpiDriverConfig};
@@ -22,7 +26,9 @@ use esp_idf_svc::wifi::EspWifi;
 use ssd1680::color::Black;
 use ssd1680::prelude::{Display, DisplayAnyIn, DisplayRotation, Ssd1680};
 use std::cell::RefCell;
-use std::str::FromStr; // 如果是单线程操作
+use std::str::FromStr;
+
+// 如果是单线程操作
 type Ssd1680Display<'d> = Ssd1680<
     SpiDeviceDriver<'d, SpiDriver<'d>>,
     PinDriver<'d, Gpio16, Input>, // BUSY
@@ -77,9 +83,29 @@ impl<'d> BoardPeripherals<'d> {
             peripherals.pins.gpio18,
             &i2c::I2cConfig::default(),
         )?;
-        let sht3x_iic_bus = RefCell::new(i2c_driver);
-        let _sensor = Sht3x::new(RefCellDevice::new(&sht3x_iic_bus), DEFAULT_I2C_ADDRESS, Ets);
+        let iic_bus = RefCell::new(i2c_driver);
+        let _sensor = Sht3x::new(RefCellDevice::new(&iic_bus), DEFAULT_I2C_ADDRESS, Ets);
 
+        let i2s = peripherals.i2s0;
+
+        // i2s相关初始化
+        let i2s_driver = I2sDriver::new_std_bidir(
+            i2s,
+            &es8388::driver::default_i2s_config(),
+            peripherals.pins.gpio47,
+            peripherals.pins.gpio45,
+            peripherals.pins.gpio1,
+            Some(peripherals.pins.gpio2),
+            peripherals.pins.gpio48,
+        )
+        .context("Failed to initialize I2S bidirectional driver")?;
+        let en_spk = PinDriver::output(peripherals.pins.gpio20)?;
+        let _es8388 = Es8388::new(
+            i2s_driver,
+            RefCellDevice::new(&iic_bus),
+            en_spk,
+            es8388::driver::CHIP_ADDR,
+        )?;
         let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
         if let Err(e) = Self::wifi_connect(&mut wifi, &device_config) {
             log::warn!("Wifi connect error: {e:?}");
