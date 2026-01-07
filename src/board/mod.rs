@@ -2,7 +2,7 @@ pub mod es8388;
 pub mod get_clock_ntp;
 mod psram;
 
-use crate::board::es8388::driver::Es8388;
+use crate::board::es8388::driver::{Es8388, RunMode};
 use crate::communication::http_server::HttpServer;
 use crate::device_config::DeviceConfig;
 use crate::file_system::nvs_flash_filesystem_init;
@@ -105,7 +105,8 @@ impl<'d> BoardPeripherals<'d> {
             RefCellDevice::new(&iic_bus),
             en_spk,
             es8388::driver::CHIP_ADDR,
-        )?;
+            RunMode::AdcDac,
+        );
         let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
         if let Err(e) = Self::wifi_connect(&mut wifi, &device_config) {
             log::warn!("Wifi connect error: {e:?}");

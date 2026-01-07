@@ -4,6 +4,7 @@ use esp_idf_svc::hal::i2s::config::{
     DataBitWidth, MclkMultiple, SlotMode, StdClkConfig, StdConfig, StdSlotConfig,
 };
 use esp_idf_svc::hal::i2s::{config, I2sBiDir, I2sDriver};
+use std::cmp::PartialEq;
 
 pub const CHIP_ADDR: u8 = 0x10; // 芯片地址, ce是低电平时
 #[allow(dead_code)]
@@ -12,6 +13,14 @@ pub struct Es8388<'d, I2C, EnSpk> {
     i2s: I2sDriver<'d, I2sBiDir>,
     en_spk: EnSpk,
     addr: u8,
+    mode: RunMode,
+}
+
+#[derive(PartialEq)]
+pub enum RunMode {
+    Adc,
+    Dac,
+    AdcDac,
 }
 
 impl<'d, I2C, EnSpk> Es8388<'d, I2C, EnSpk>
@@ -24,16 +33,103 @@ where
         i2c: I2C,
         en_spk: EnSpk,
         addr: u8,
-    ) -> anyhow::Result<Self> {
-        let mut es8388 = Es8388 {
+        mode: RunMode,
+    ) -> Self {
+        Es8388 {
             i2c,
             i2s,
             en_spk,
             addr,
-        };
-        es8388.test_i2c_rw()?;
-        Ok(es8388)
+            mode,
+        }
     }
+
+    /// 初始化芯片, 一些寄存器会先变成复位状态, 知道真正开始时才会设置值, 在start()函数中配置
+    pub fn init(&mut self) -> anyhow::Result<()> {
+        self.test_i2c_rw()?;
+        // 使用默认值的可以不发送
+        self.write_reg(Command::ChipControl1, 0b0001_0110)?;
+        self.write_reg(Command::ChipControl2, Command::ChipControl2.default_value())?;
+        // 电源相关的全部开启, 测试完成后可以考虑关闭部分不使用的功能
+        self.write_reg(Command::ChipPowerManagement, 0x00)?;
+        self.write_reg(Command::MasterModeControl, 0x00)?;
+
+        if self.mode == RunMode::Dac || self.mode == RunMode::AdcDac {
+            self.write_reg(Command::AdcPowerManagement, 0xff)?; // 先复位然后在start中配置
+            self.write_reg(Command::DacPowerManagement, 0x00)?;
+
+            self.write_reg(Command::DacControl1, 0b0001_1000)?;
+            self.write_reg(Command::DacControl2, 0b0000_0010)?; // 设置采样频率, 要和i2s配置的一样, 具体值查表
+            self.write_reg(Command::DacControl16, 0x00)?;
+            self.write_reg(Command::DacControl17, 0x90)?; // 左咪头声音不混入扬声器
+            self.write_reg(Command::DacControl20, 0x90)?; // 右咪头声音不混入扬声器
+            self.write_reg(Command::DacControl21, 0x80)?;
+            self.write_reg(Command::DacControl23, 0x00)?; // 扬声器规格是8欧5w的
+            self.set_dac_volume(0)?; // 设置输入信号的增幅, 这里直接最大
+        }
+
+        if self.mode == RunMode::Adc || self.mode == RunMode::AdcDac {
+            // 配置adc相关寄存器
+            // self.write_reg(Command::AdcPowerManagement, 0x80)?;
+            self.write_reg(Command::AdcControl1, 0x22)?; // 看别的代码配的是0xbb, 看手册没这个匹配的模式, 这里改为我自己认为正确的
+            self.write_reg(Command::AdcControl2, 0x00)?;
+            self.write_reg(Command::AdcControl3, 0b0000_0000)?;
+            self.write_reg(Command::AdcControl4, 0b0000_1100)?;
+            self.write_reg(Command::AdcControl5, 0x02)?;
+        }
+        Ok(())
+    }
+
+    /// 配置完成后在启动, 避免不需要芯片工作时带来的功耗
+    pub fn start(&mut self) -> anyhow::Result<()> {
+        if self.mode == RunMode::Adc || self.mode == RunMode::AdcDac {
+            self.write_reg(Command::AdcPowerManagement, 0x00)?;
+        }
+        if self.mode == RunMode::Dac || self.mode == RunMode::AdcDac {
+            self.write_reg(Command::DacPowerManagement, 0b1111_0000)?;
+            self.write_reg(Command::DacControl17, 0x50)?;
+            self.write_reg(Command::DacControl20, 0x50)?;
+            self.set_voice_volume(50)?;
+        }
+
+        Ok(())
+    }
+
+    fn get_adc_dac_volume_from_arg(volume: u8) -> u8 {
+        let pct = volume.min(100);
+        let target_db = -((100 - pct) as f32 * 96.0 / 100.0);
+        let reg_val = (target_db.abs() / 0.5) as u8;
+        reg_val.min(192)
+    }
+    /// 设置音量输出, 左右声道音量相同, 这里调节的是输入的数字型号
+    pub fn set_dac_volume(&mut self, volume: u8) -> anyhow::Result<()> {
+        let volume = Self::get_adc_dac_volume_from_arg(volume);
+        self.write_reg(Command::DacControl4, volume)?;
+        self.write_reg(Command::DacControl5, volume)?;
+        Ok(())
+    }
+
+    /// 将音量转为芯片音量的对应bit
+    fn get_voice_volume_from_arg(volume: u8) -> u8 {
+        let pct = volume.max(0);
+        let target_db = -((100 - pct) as f32 * 96.0 / 100.0);
+        let reg_val = (target_db.abs() / 1.5) as u8;
+        reg_val.min(30)
+        // volume.max(100) / 3
+    }
+    /// 设置音量输出, 左右声道音量相同, 这里调节的是最终输出的模拟信号
+    pub fn set_voice_volume(&mut self, volume: u8) -> anyhow::Result<()> {
+        let volume = Self::get_voice_volume_from_arg(volume);
+        self.write_reg(Command::DacControl24, volume)?;
+        self.write_reg(Command::DacControl25, volume)?;
+        Ok(())
+    }
+
+    // pub fn read_all(&mut self) -> anyhow::Result<Vec<u8>> {
+    //     let mut buf: Vec<u8> = Vec::new();
+    //     for cmd in Command::
+    //     Ok(buf)
+    // }
 
     /// 写入寄存器
     pub fn write_reg(&mut self, reg: Command, val: u8) -> anyhow::Result<()> {
@@ -55,7 +151,6 @@ where
     /// buffer: 16-bit PCM 数据
     /// timeout_ms: 写入超时时间
     pub fn write_audio(&mut self, data: &[u8], timeout_ms: u32) -> anyhow::Result<usize> {
-        // I2sDriver 已经在 new_std_bidir 中初始化为双向
         self.i2s
             .write(data, timeout_ms)
             .map_err(|e| anyhow::anyhow!("I2S Write Error: {:?}", e))
@@ -92,6 +187,8 @@ where
         Ok(())
     }
 }
+
+// 生成默认的i2s配置
 pub fn default_i2s_config() -> StdConfig {
     let channel_cfg = config::Config::default();
     let i2s_std_clk_config = StdClkConfig::new(44100, Default::default(), MclkMultiple::M256);
