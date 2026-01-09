@@ -1,4 +1,4 @@
-use crate::board::BoardPeripherals;
+use crate::board::peripheral::BoardPeripherals;
 use crate::ui::home_page::HomePageInfo;
 use crate::ui::sensor_page::SensorPage;
 use anyhow::anyhow;

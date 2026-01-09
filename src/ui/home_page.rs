@@ -1,4 +1,4 @@
-use crate::board::BoardPeripherals;
+use crate::board::peripheral::BoardPeripherals;
 use crate::ui::general_block;
 use anyhow::anyhow;
 use embedded_graphics::pixelcolor::BinaryColor;

@@ -1,5 +1,4 @@
-use crate::board::BoardPeripherals;
-use crate::ui::{general_block, UiInfo};
+use crate::ui::{general_block, BoardPeripherals, UiInfo};
 use anyhow::anyhow;
 use mousefood::prelude::{Alignment, Constraint, Direction, Frame, Layout, Terminal};
 use mousefood::ratatui::widgets::Paragraph;

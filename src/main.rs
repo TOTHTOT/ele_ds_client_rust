@@ -1,6 +1,6 @@
 use ele_ds_client_rust::ui::mouse_food_test;
 use ele_ds_client_rust::{
-    board::BoardPeripherals,
+    board::peripheral::BoardPeripherals,
     communication::{http_client, ota},
 };
 use std::sync::{Arc, Mutex};
