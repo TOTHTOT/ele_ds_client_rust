@@ -3,20 +3,21 @@ pub mod get_clock_ntp;
 mod psram;
 
 use crate::board::es8388::driver::{Es8388, RunMode};
+use crate::board::share_i2c_bus::SharedI2cDevice;
 use crate::communication::http_server::HttpServer;
 use crate::device_config::DeviceConfig;
 use crate::file_system::nvs_flash_filesystem_init;
 use anyhow::Context;
 use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::{Circle, PrimitiveStyle, Rectangle};
-use embedded_hal_bus::i2c::RefCellDevice;
 use embedded_sht3x::{Sht3x, DEFAULT_I2C_ADDRESS};
 use embedded_svc::wifi;
 use embedded_svc::wifi::AuthMethod;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::delay::Ets;
-use esp_idf_svc::hal::gpio::{AnyIOPin, Gpio16, Gpio6, Gpio7, Input, Output, PinDriver};
+use esp_idf_svc::hal::gpio::{AnyIOPin, Gpio16, Gpio20, Gpio6, Gpio7, Input, Output, PinDriver};
 use esp_idf_svc::hal::i2c;
+use esp_idf_svc::hal::i2c::I2cDriver;
 use esp_idf_svc::hal::i2s::I2sDriver;
 use esp_idf_svc::hal::peripherals::Peripherals;
 use esp_idf_svc::hal::spi;
@@ -26,24 +27,30 @@ use esp_idf_svc::wifi::EspWifi;
 use ssd1680::color::Black;
 use ssd1680::prelude::{Display, DisplayAnyIn, DisplayRotation, Ssd1680};
 use std::cell::RefCell;
+use std::rc::Rc;
 use std::str::FromStr;
+// use shared_bus::I2cProxy;
 
 // 如果是单线程操作
-type Ssd1680Display<'d> = Ssd1680<
+type Ssd1680DisplayType<'d> = Ssd1680<
     SpiDeviceDriver<'d, SpiDriver<'d>>,
     PinDriver<'d, Gpio16, Input>, // BUSY
     PinDriver<'d, Gpio7, Output>, // DC
     PinDriver<'d, Gpio6, Output>, // RST
 >;
+type Es8388Type<'d> = Es8388<'d, SharedI2cDevice<I2cDriver<'d>>, PinDriver<'d, Gpio20, Output>>;
+// type Es8388Type<'d> = Es8388<'d, I2cProxy<'d, I2cDriver<'d>>, PinDriver<'d, Gpio20, Output>>;
 
 #[allow(dead_code)]
 pub struct BoardPeripherals<'d> {
     wifi: EspWifi<'d>,
     http_server: HttpServer<'d>,
+    // iic_bus: RefCell<I2cDriver<'d>>,
     pub device_config: DeviceConfig,
     pub bw_buf: DisplayAnyIn,
-    pub ssd1680: Ssd1680Display<'d>,
+    pub ssd1680: Ssd1680DisplayType<'d>,
     pub delay: Ets,
+    pub es8388: Es8388Type<'d>,
 }
 #[allow(dead_code)]
 impl<'d> BoardPeripherals<'d> {
@@ -77,14 +84,14 @@ impl<'d> BoardPeripherals<'d> {
         let ssd1680 = Ssd1680::new(spi, busy, dc, rst, &mut delay, 128, 296).unwrap();
         let mut display_bw = DisplayAnyIn::bw(128, 296);
         display_bw.set_rotation(DisplayRotation::Rotate270);
-        let i2c_driver = i2c::I2cDriver::new(
+        let i2c_driver = I2cDriver::new(
             peripherals.i2c0,
             peripherals.pins.gpio8,
             peripherals.pins.gpio18,
             &i2c::I2cConfig::default(),
         )?;
-        let iic_bus = RefCell::new(i2c_driver);
-        let _sensor = Sht3x::new(RefCellDevice::new(&iic_bus), DEFAULT_I2C_ADDRESS, Ets);
+        let iic_bus = Rc::new(RefCell::new(i2c_driver));
+        let _sensor = Sht3x::new(SharedI2cDevice(iic_bus.clone()), DEFAULT_I2C_ADDRESS, Ets);
 
         let i2s = peripherals.i2s0;
 
@@ -99,10 +106,12 @@ impl<'d> BoardPeripherals<'d> {
             peripherals.pins.gpio48,
         )
         .context("Failed to initialize I2S bidirectional driver")?;
+        let es8388_i2c = SharedI2cDevice(iic_bus.clone());
         let en_spk = PinDriver::output(peripherals.pins.gpio20)?;
-        let _es8388 = Es8388::new(
+        let es8388 = Es8388::new(
             i2s_driver,
-            RefCellDevice::new(&iic_bus),
+            es8388_i2c,
+            // i2c_ref_cell.acquire_i2c(),
             en_spk,
             es8388::driver::CHIP_ADDR,
             RunMode::AdcDac,
@@ -112,6 +121,7 @@ impl<'d> BoardPeripherals<'d> {
             log::warn!("Wifi connect error: {e:?}");
         }
         let http_server = HttpServer::new()?;
+
         Ok(BoardPeripherals {
             wifi,
             http_server,
@@ -119,6 +129,7 @@ impl<'d> BoardPeripherals<'d> {
             bw_buf: display_bw,
             ssd1680,
             delay,
+            es8388,
         })
     }
 
@@ -199,5 +210,44 @@ impl<'d> BoardPeripherals<'d> {
         self.ssd1680.update_bw_frame(self.bw_buf.buffer()).unwrap();
         self.ssd1680.display_frame(&mut self.delay).unwrap();
         Ok(())
+    }
+}
+
+pub mod share_i2c_bus {
+    use core::cell::RefCell;
+    use embedded_hal::i2c::{ErrorType, I2c, Operation};
+    use std::rc::Rc;
+
+    pub struct SharedI2cDevice<T>(pub Rc<RefCell<T>>);
+
+    impl<T: ErrorType> ErrorType for SharedI2cDevice<T> {
+        type Error = T::Error;
+    }
+
+    impl<T: I2c> I2c for SharedI2cDevice<T> {
+        fn read(&mut self, address: u8, read: &mut [u8]) -> Result<(), Self::Error> {
+            self.0.borrow_mut().read(address, read)
+        }
+
+        fn write(&mut self, address: u8, write: &[u8]) -> Result<(), Self::Error> {
+            self.0.borrow_mut().write(address, write)
+        }
+
+        fn write_read(
+            &mut self,
+            address: u8,
+            write: &[u8],
+            read: &mut [u8],
+        ) -> Result<(), Self::Error> {
+            self.0.borrow_mut().write_read(address, write, read)
+        }
+
+        fn transaction(
+            &mut self,
+            address: u8,
+            operations: &mut [Operation<'_>],
+        ) -> Result<(), Self::Error> {
+            self.0.borrow_mut().transaction(address, operations)
+        }
     }
 }

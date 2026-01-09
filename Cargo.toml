@@ -38,13 +38,13 @@ esp-idf-sys = "0.36"
 # If you enable embassy-time-driver, you MUST also add one of:
 
 # a) Standalone Embassy libs ( embassy-time, embassy-sync etc.) with a foreign async runtime:
- embassy-time = { version = "0.4.0", features = ["generic-queue-8"] } # NOTE: any generic-queue variant will work
+# embassy-time = { version = "0.4.0", features = ["generic-queue-8"] } # NOTE: any generic-queue variant will work
 ssd1680 = {path = "src/ssd1680"}
 embedded-graphics = "0.8.1"
 mousefood = "0.2.1"
 tinybmp = "0.6.0"
 embedded-sht3x = "0.1.0"
-embedded-hal-bus = "0.2.0"
+#embedded-hal-bus = { version = "0.3.0", features = ["std"] }
 embedded-hal = "1.0.0"
 
 # b) With embassy-executor:

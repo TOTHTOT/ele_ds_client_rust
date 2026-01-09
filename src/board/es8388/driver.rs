@@ -111,7 +111,7 @@ where
 
     /// 将音量转为芯片音量的对应bit
     fn get_voice_volume_from_arg(volume: u8) -> u8 {
-        let pct = volume.max(0);
+        let pct = volume;
         let target_db = -((100 - pct) as f32 * 96.0 / 100.0);
         let reg_val = (target_db.abs() / 1.5) as u8;
         reg_val.min(30)
