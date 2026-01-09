@@ -14,14 +14,17 @@ fn main() -> anyhow::Result<()> {
     log::info!("system start, build info: {} 12", env!("BUILD_TIME"));
     let board = Arc::new(Mutex::new(BoardPeripherals::new()?));
     let mut ui_board = board.clone();
-    // board.test_epd_display()?;
+
     mouse_food_test(&mut ui_board)?;
-    {
-        board.lock().unwrap().ssd1680.entry_sleep().unwrap();
-    }
     loop {
-        // std::thread::sleep(std::time::Duration::from_secs(1));
-        board.lock().unwrap().device_config.boot_times_add()?;
+        let mut board = board
+            .lock()
+            .map_err(|e| anyhow::anyhow!("lock board failed: {e:?}"))?;
+        board.device_config.boot_times_add()?;
+        board
+            .ssd1680
+            .entry_sleep()
+            .map_err(|e| anyhow::anyhow!("ssd1680 entry sleep error: {e:?}"))?;
         ele_ds_client_rust::power_manage::enter_deep_sleep_mode_per_minute();
     }
 }

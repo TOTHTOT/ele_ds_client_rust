@@ -103,14 +103,15 @@ impl<'d> BoardPeripherals<'d> {
         .context("Failed to initialize I2S bidirectional driver")?;
         let es8388_i2c = SharedI2cDevice(iic_bus.clone());
         let en_spk = PinDriver::output(peripherals.pins.gpio20)?;
-        let es8388 = Es8388::new(
+        let mut es8388 = Es8388::new(
             i2s_driver,
             es8388_i2c,
-            // i2c_ref_cell.acquire_i2c(),
             en_spk,
             es8388::driver::CHIP_ADDR,
             RunMode::AdcDac,
         );
+        es8388.init()?;
+        es8388.start()?;
         let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
         if let Err(e) = Self::wifi_connect(&mut wifi, &device_config) {
             log::warn!("Wifi connect error: {e:?}");

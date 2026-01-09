@@ -82,6 +82,9 @@ where
 
     /// 配置完成后在启动, 避免不需要芯片工作时带来的功耗
     pub fn start(&mut self) -> anyhow::Result<()> {
+        log::info!("Starting i2s");
+        self.i2s.rx_enable()?;
+        self.i2s.tx_enable()?;
         if self.mode == RunMode::Adc || self.mode == RunMode::AdcDac {
             self.write_reg(Command::AdcPowerManagement, 0x00)?;
         }
