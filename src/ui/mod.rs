@@ -17,7 +17,9 @@ pub struct UiInfo {
 }
 
 pub fn mouse_food_test(board: &mut Arc<Mutex<BoardPeripherals>>) -> anyhow::Result<()> {
-    let pages = vec![HomePageInfo::build_home_page, SensorPage::build_sensor_page];
+    let pages = vec![
+        HomePageInfo::build_home_page, /*, SensorPage::build_sensor_page*/
+    ];
     for page in pages {
         page(board.clone())?;
         let mut board = board.lock().map_err(|_| anyhow!("Mutex lock error"))?;

@@ -10,7 +10,9 @@
       <w>netif</w>
       <w>psram</w>
       <w>sysloop</w>
+      <w>vbat</w>
       <w>vmid</w>
+      <w>vout</w>
       <w>vref</w>
     </words>
   </dictionary>

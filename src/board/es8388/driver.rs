@@ -138,7 +138,7 @@ where
     pub fn write_reg(&mut self, reg: Command, val: u8) -> anyhow::Result<()> {
         self.i2c
             .write(self.addr, &[reg.reg_addr(), val])
-            .map_err(|e| anyhow::anyhow!("I2C Write Error: {:?}", e))
+            .map_err(|e| anyhow::anyhow!("I2C Write Error: {e:?}"))
     }
 
     /// 读取寄存器
@@ -146,7 +146,7 @@ where
         let mut buffer = [0u8; 1];
         self.i2c
             .write_read(self.addr, &[reg.reg_addr()], &mut buffer)
-            .map_err(|e| anyhow::anyhow!("I2C Read Error: {:?}", e))?;
+            .map_err(|e| anyhow::anyhow!("I2C Read Error: {e:?}"))?;
         Ok(buffer[0])
     }
 
@@ -156,7 +156,7 @@ where
     pub fn write_audio(&mut self, data: &[u8], timeout_ms: u32) -> anyhow::Result<usize> {
         self.i2s
             .write(data, timeout_ms)
-            .map_err(|e| anyhow::anyhow!("I2S Write Error: {:?}", e))
+            .map_err(|e| anyhow::anyhow!("I2S Write Error: {e:?}"))
     }
 
     /// 录制音频 (读取 I2S)
@@ -164,7 +164,7 @@ where
     pub fn read_audio(&mut self, buffer: &mut [u8], timeout_ms: u32) -> anyhow::Result<usize> {
         self.i2s
             .read(buffer, timeout_ms)
-            .map_err(|e| anyhow::anyhow!("I2S Read Error: {:?}", e))
+            .map_err(|e| anyhow::anyhow!("I2S Read Error: {e:?}"))
     }
 
     /// 开启扬声器

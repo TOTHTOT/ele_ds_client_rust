@@ -1,3 +1,4 @@
+use ele_ds_client_rust::power_manage::next_minute_left_time;
 use ele_ds_client_rust::ui::mouse_food_test;
 use ele_ds_client_rust::{
     board::peripheral::BoardPeripherals,
@@ -15,17 +16,20 @@ fn main() -> anyhow::Result<()> {
     let board = Arc::new(Mutex::new(BoardPeripherals::new()?));
     let mut ui_board = board.clone();
 
-    mouse_food_test(&mut ui_board)?;
-    loop {
+    {
         let mut board = board
             .lock()
             .map_err(|e| anyhow::anyhow!("lock board failed: {e:?}"))?;
         board.device_config.boot_times_add()?;
-        board
-            .ssd1680
-            .entry_sleep()
-            .map_err(|e| anyhow::anyhow!("ssd1680 entry sleep error: {e:?}"))?;
-        ele_ds_client_rust::power_manage::enter_deep_sleep_mode_per_minute();
+        // board
+        //     .ssd1680
+        //     .entry_sleep()
+        //     .map_err(|e| anyhow::anyhow!("ssd1680 entry sleep error: {e:?}"))?;
+    }
+    loop {
+        mouse_food_test(&mut ui_board)?;
+        std::thread::sleep(std::time::Duration::from_micros(next_minute_left_time()));
+        // ele_ds_client_rust::power_manage::enter_deep_sleep_mode_per_minute();
     }
 }
 

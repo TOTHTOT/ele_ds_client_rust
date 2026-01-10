@@ -12,7 +12,10 @@ use embedded_svc::wifi;
 use embedded_svc::wifi::AuthMethod;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::delay::Ets;
-use esp_idf_svc::hal::gpio::{AnyIOPin, Gpio16, Gpio20, Gpio6, Gpio7, Input, Output, PinDriver};
+use esp_idf_svc::hal::gpio::{
+    AnyIOPin, Gpio10, Gpio12, Gpio13, Gpio14, Gpio16, Gpio20, Gpio6, Gpio7, Input, Output,
+    PinDriver,
+};
 use esp_idf_svc::hal::i2c;
 use esp_idf_svc::hal::i2c::I2cDriver;
 use esp_idf_svc::hal::i2s::I2sDriver;
@@ -40,13 +43,77 @@ type Es8388Type<'d> = Es8388<'d, SharedI2cDevice<I2cDriver<'d>>, PinDriver<'d, G
 pub struct BoardPeripherals<'d> {
     wifi: EspWifi<'d>,
     http_server: HttpServer<'d>,
-    // iic_bus: RefCell<I2cDriver<'d>>,
     pub device_config: DeviceConfig,
     pub bw_buf: DisplayAnyIn,
-    pub ssd1680: Ssd1680DisplayType<'d>,
     pub delay: Ets,
+    pub ssd1680: Ssd1680DisplayType<'d>,
     pub es8388: Es8388Type<'d>,
+    vout_3v3: PinDriver<'d, Gpio10, Output>,
+    pub device_battery: DeviceBattery<
+        PinDriver<'d, Gpio12, Input>,
+        PinDriver<'d, Gpio13, Input>,
+        PinDriver<'d, Gpio14, Input>,
+    >,
 }
+
+pub struct DeviceBattery<VBAT1, VBAT2, VBAT3> {
+    vbat_1: VBAT1,
+    vbat_2: VBAT2,
+    vbat_3: VBAT3,
+}
+#[derive(Debug)]
+pub enum DeviceBatteryType {
+    PercentVbat100,
+    PercentVbat100_75,
+    PercentVbat75_50,
+    PercentVbat50_25,
+    PercentVbat25_0,
+}
+
+impl<VBAT1, VBAT2, VBAT3> DeviceBattery<VBAT1, VBAT2, VBAT3>
+where
+    VBAT1: embedded_hal::digital::InputPin,
+    VBAT2: embedded_hal::digital::InputPin,
+    VBAT3: embedded_hal::digital::InputPin,
+{
+    pub fn new(vbat_1: VBAT1, vbat_2: VBAT2, vbat_3: VBAT3) -> Self {
+        Self {
+            vbat_1,
+            vbat_2,
+            vbat_3,
+        }
+    }
+
+    /// 获取实际电量, 根据手册需要延迟一段时间才能读完全部io信息
+    pub fn current_vbat(&mut self) -> anyhow::Result<DeviceBatteryType> {
+        let mut d1_active = false;
+        let mut d2_active = false;
+        let mut d3_active = false;
+
+        for _ in 0..150 {
+            if self.vbat_1.is_low().map_err(|e| anyhow::anyhow!("{e:?}"))? {
+                d1_active = true;
+            }
+            if self.vbat_2.is_low().map_err(|e| anyhow::anyhow!("{e:?}"))? {
+                d2_active = true;
+            }
+            if self.vbat_3.is_low().map_err(|e| anyhow::anyhow!("{e:?}"))? {
+                d3_active = true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        if d3_active {
+            Ok(DeviceBatteryType::PercentVbat100)
+        } else if d2_active {
+            Ok(DeviceBatteryType::PercentVbat75_50)
+        } else if d1_active {
+            Ok(DeviceBatteryType::PercentVbat50_25)
+        } else {
+            Ok(DeviceBatteryType::PercentVbat25_0)
+        }
+    }
+}
+
 #[allow(dead_code)]
 impl<'d> BoardPeripherals<'d> {
     pub fn new() -> anyhow::Result<BoardPeripherals<'d>> {
@@ -58,6 +125,15 @@ impl<'d> BoardPeripherals<'d> {
         let device_config = BoardPeripherals::init_filesystem_load_config()?;
         get_clock_ntp::set_time_zone(device_config.time_zone.as_str())?;
 
+        // 基本io口初始化
+        let mut vout_3v3 = PinDriver::output(peripherals.pins.gpio10)?;
+        vout_3v3.set_high()?;
+        let mut device_battery = DeviceBattery::new(
+            PinDriver::input(peripherals.pins.gpio12)?,
+            PinDriver::input(peripherals.pins.gpio13)?,
+            PinDriver::input(peripherals.pins.gpio14)?,
+        );
+        log::info!("current battery: {:?}", device_battery.current_vbat()?);
         let spi = peripherals.spi2;
         let sclk = peripherals.pins.gpio4;
         let sdo = peripherals.pins.gpio5;
@@ -103,15 +179,13 @@ impl<'d> BoardPeripherals<'d> {
         .context("Failed to initialize I2S bidirectional driver")?;
         let es8388_i2c = SharedI2cDevice(iic_bus.clone());
         let en_spk = PinDriver::output(peripherals.pins.gpio20)?;
-        let mut es8388 = Es8388::new(
+        let es8388 = Es8388::new(
             i2s_driver,
             es8388_i2c,
             en_spk,
             es8388::driver::CHIP_ADDR,
             RunMode::AdcDac,
         );
-        es8388.init()?;
-        es8388.start()?;
         let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
         if let Err(e) = Self::wifi_connect(&mut wifi, &device_config) {
             log::warn!("Wifi connect error: {e:?}");
@@ -123,9 +197,11 @@ impl<'d> BoardPeripherals<'d> {
             http_server,
             device_config,
             bw_buf: display_bw,
-            ssd1680,
             delay,
             es8388,
+            ssd1680,
+            vout_3v3,
+            device_battery,
         })
     }
 
@@ -206,5 +282,12 @@ impl<'d> BoardPeripherals<'d> {
         self.ssd1680.update_bw_frame(self.bw_buf.buffer()).unwrap();
         self.ssd1680.display_frame(&mut self.delay).unwrap();
         Ok(())
+    }
+}
+
+impl<'d> Drop for BoardPeripherals<'d> {
+    fn drop(&mut self) {
+        log::warn!("Dropping BoardPeripherals, close power");
+        self.vout_3v3.set_low().unwrap();
     }
 }

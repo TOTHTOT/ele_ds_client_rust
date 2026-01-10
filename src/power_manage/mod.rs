@@ -23,14 +23,18 @@ pub fn enter_light_sleep_mode() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn enter_deep_sleep_mode_per_minute() {
+/// 距离下一分钟还有多久, 返回微妙
+pub fn next_minute_left_time() -> u64 {
     let now = chrono::Local::now();
 
     let seconds_to_wait = 59 - now.second();
     let nanos_to_wait = 1_000_000_000 - now.timestamp_nanos_opt().unwrap_or(0) % 1_000_000_000;
 
-    // 转换为微秒 (us)
-    let sleep_time_us = (seconds_to_wait as u64 * 1_000_000) + (nanos_to_wait / 1_000) as u64;
+    (seconds_to_wait as u64 * 1_000_000) + (nanos_to_wait / 1_000) as u64
+}
+pub fn enter_deep_sleep_mode_per_minute() {
+    let now = chrono::Local::now();
+    let sleep_time_us = next_minute_left_time();
 
     log::info!(
         "Current time: {:02}:{:02}:{:02}, aligned sleep for {} us",
