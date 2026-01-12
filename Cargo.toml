@@ -46,6 +46,7 @@ tinybmp = "0.6.0"
 embedded-sht3x = "0.1.0"
 #embedded-hal-bus = { version = "0.3.0", features = ["std"] }
 embedded-hal = "1.0.0"
+enumset = "1.1.10"
 
 # b) With embassy-executor:
 # embassy-executor = { version = "0.7", features = ["executor-thread", "arch-std"] }

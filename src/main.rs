@@ -1,4 +1,4 @@
-use ele_ds_client_rust::power_manage::next_minute_left_time;
+use ele_ds_client_rust::board::power_manage::next_minute_left_time;
 use ele_ds_client_rust::ui::mouse_food_test;
 use ele_ds_client_rust::{
     board::peripheral::BoardPeripherals,

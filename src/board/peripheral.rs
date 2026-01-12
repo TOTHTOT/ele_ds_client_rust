@@ -1,4 +1,5 @@
 use crate::board::es8388::driver::{Es8388, RunMode};
+use crate::board::power_manage::DeviceBattery;
 use crate::board::share_i2c_bus::SharedI2cDevice;
 use crate::board::{es8388, get_clock_ntp, psram};
 use crate::communication::http_server::HttpServer;
@@ -7,19 +8,21 @@ use crate::file_system::nvs_flash_filesystem_init;
 use anyhow::Context;
 use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::{Circle, PrimitiveStyle, Rectangle};
-use embedded_sht3x::{Sht3x, DEFAULT_I2C_ADDRESS};
+use embedded_sht3x::{Repeatability, Sht3x, DEFAULT_I2C_ADDRESS};
 use embedded_svc::wifi;
 use embedded_svc::wifi::AuthMethod;
+use enumset::EnumSet;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::delay::Ets;
 use esp_idf_svc::hal::gpio::{
-    AnyIOPin, Gpio10, Gpio12, Gpio13, Gpio14, Gpio16, Gpio20, Gpio6, Gpio7, Input, Output,
+    AnyIOPin, Gpio10, Gpio12, Gpio13, Gpio14, Gpio16, Gpio19, Gpio20, Gpio6, Gpio7, Input, Output,
     PinDriver,
 };
-use esp_idf_svc::hal::i2c;
-use esp_idf_svc::hal::i2c::I2cDriver;
+use esp_idf_svc::hal::i2c::{I2cConfig, I2cDriver};
 use esp_idf_svc::hal::i2s::I2sDriver;
+use esp_idf_svc::hal::interrupt::InterruptType;
 use esp_idf_svc::hal::peripherals::Peripherals;
+use esp_idf_svc::hal::prelude::Hertz;
 use esp_idf_svc::hal::spi;
 use esp_idf_svc::hal::spi::{SpiDeviceDriver, SpiDriver, SpiDriverConfig};
 use esp_idf_svc::nvs::{EspNvsPartition, NvsDefault};
@@ -49,69 +52,12 @@ pub struct BoardPeripherals<'d> {
     pub ssd1680: Ssd1680DisplayType<'d>,
     pub es8388: Es8388Type<'d>,
     vout_3v3: PinDriver<'d, Gpio10, Output>,
+    sht3x_rst: PinDriver<'d, Gpio19, Output>,
     pub device_battery: DeviceBattery<
         PinDriver<'d, Gpio12, Input>,
         PinDriver<'d, Gpio13, Input>,
         PinDriver<'d, Gpio14, Input>,
     >,
-}
-
-pub struct DeviceBattery<VBAT1, VBAT2, VBAT3> {
-    vbat_1: VBAT1,
-    vbat_2: VBAT2,
-    vbat_3: VBAT3,
-}
-#[derive(Debug)]
-pub enum DeviceBatteryType {
-    PercentVbat100,
-    PercentVbat100_75,
-    PercentVbat75_50,
-    PercentVbat50_25,
-    PercentVbat25_0,
-}
-
-impl<VBAT1, VBAT2, VBAT3> DeviceBattery<VBAT1, VBAT2, VBAT3>
-where
-    VBAT1: embedded_hal::digital::InputPin,
-    VBAT2: embedded_hal::digital::InputPin,
-    VBAT3: embedded_hal::digital::InputPin,
-{
-    pub fn new(vbat_1: VBAT1, vbat_2: VBAT2, vbat_3: VBAT3) -> Self {
-        Self {
-            vbat_1,
-            vbat_2,
-            vbat_3,
-        }
-    }
-
-    /// 获取实际电量, 根据手册需要延迟一段时间才能读完全部io信息
-    pub fn current_vbat(&mut self) -> anyhow::Result<DeviceBatteryType> {
-        let mut d1_active = false;
-        let mut d2_active = false;
-        let mut d3_active = false;
-
-        for _ in 0..150 {
-            if self.vbat_1.is_low().map_err(|e| anyhow::anyhow!("{e:?}"))? {
-                d1_active = true;
-            }
-            if self.vbat_2.is_low().map_err(|e| anyhow::anyhow!("{e:?}"))? {
-                d2_active = true;
-            }
-            if self.vbat_3.is_low().map_err(|e| anyhow::anyhow!("{e:?}"))? {
-                d3_active = true;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-        if d3_active {
-            Ok(DeviceBatteryType::PercentVbat100)
-        } else if d2_active {
-            Ok(DeviceBatteryType::PercentVbat75_50)
-        } else if d1_active {
-            Ok(DeviceBatteryType::PercentVbat50_25)
-        } else {
-            Ok(DeviceBatteryType::PercentVbat25_0)
-        }
-    }
 }
 
 #[allow(dead_code)]
@@ -128,6 +74,8 @@ impl<'d> BoardPeripherals<'d> {
         // 基本io口初始化
         let mut vout_3v3 = PinDriver::output(peripherals.pins.gpio10)?;
         vout_3v3.set_high()?;
+        let mut sht3x_rst = PinDriver::output(peripherals.pins.gpio19)?;
+        sht3x_rst.set_high()?;
         let mut device_battery = DeviceBattery::new(
             PinDriver::input(peripherals.pins.gpio12)?,
             PinDriver::input(peripherals.pins.gpio13)?,
@@ -155,15 +103,27 @@ impl<'d> BoardPeripherals<'d> {
         let ssd1680 = Ssd1680::new(spi, busy, dc, rst, &mut delay, 128, 296).unwrap();
         let mut display_bw = DisplayAnyIn::bw(128, 296);
         display_bw.set_rotation(DisplayRotation::Rotate270);
+
+        let i2c_config = I2cConfig {
+            baudrate: Hertz(100_000),
+            sda_pullup_enabled: true,
+            scl_pullup_enabled: true,
+            timeout: None,
+            intr_flags: EnumSet::<InterruptType>::empty(),
+        };
         let i2c_driver = I2cDriver::new(
             peripherals.i2c0,
             peripherals.pins.gpio8,
             peripherals.pins.gpio18,
-            &i2c::I2cConfig::default(),
+            &i2c_config,
         )?;
         let iic_bus = Rc::new(RefCell::new(i2c_driver));
-        let _sensor = Sht3x::new(SharedI2cDevice(iic_bus.clone()), DEFAULT_I2C_ADDRESS, Ets);
-
+        let mut sensor = Sht3x::new(SharedI2cDevice(iic_bus.clone()), DEFAULT_I2C_ADDRESS, Ets);
+        sensor.repeatability = Repeatability::High;
+        let result = sensor
+            .single_measurement()
+            .map_err(|e| anyhow::anyhow!("get sht3x filed:{e:?}"))?;
+        log::info!("Single measurement: {result:?}");
         let i2s = peripherals.i2s0;
 
         // i2s相关初始化
@@ -201,6 +161,7 @@ impl<'d> BoardPeripherals<'d> {
             es8388,
             ssd1680,
             vout_3v3,
+            sht3x_rst,
             device_battery,
         })
     }

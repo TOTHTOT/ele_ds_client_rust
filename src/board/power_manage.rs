@@ -58,3 +58,61 @@ pub fn enter_deep_sleep_mode(sleep_time_us: u64) {
         esp_deep_sleep_start();
     }
 }
+
+pub struct DeviceBattery<VBAT1, VBAT2, VBAT3> {
+    vbat_1: VBAT1,
+    vbat_2: VBAT2,
+    vbat_3: VBAT3,
+}
+#[derive(Debug)]
+pub enum DeviceBatteryType {
+    PercentVbat100,
+    PercentVbat100_75,
+    PercentVbat75_50,
+    PercentVbat50_25,
+    PercentVbat25_0,
+}
+
+impl<VBAT1, VBAT2, VBAT3> DeviceBattery<VBAT1, VBAT2, VBAT3>
+where
+    VBAT1: embedded_hal::digital::InputPin,
+    VBAT2: embedded_hal::digital::InputPin,
+    VBAT3: embedded_hal::digital::InputPin,
+{
+    pub fn new(vbat_1: VBAT1, vbat_2: VBAT2, vbat_3: VBAT3) -> Self {
+        Self {
+            vbat_1,
+            vbat_2,
+            vbat_3,
+        }
+    }
+
+    /// 获取实际电量, 根据手册需要延迟一段时间才能读完全部io信息
+    pub fn current_vbat(&mut self) -> anyhow::Result<DeviceBatteryType> {
+        let mut d1_active = false;
+        let mut d2_active = false;
+        let mut d3_active = false;
+
+        for _ in 0..150 {
+            if self.vbat_1.is_low().map_err(|e| anyhow::anyhow!("{e:?}"))? {
+                d1_active = true;
+            }
+            if self.vbat_2.is_low().map_err(|e| anyhow::anyhow!("{e:?}"))? {
+                d2_active = true;
+            }
+            if self.vbat_3.is_low().map_err(|e| anyhow::anyhow!("{e:?}"))? {
+                d3_active = true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        if d3_active {
+            Ok(DeviceBatteryType::PercentVbat100)
+        } else if d2_active {
+            Ok(DeviceBatteryType::PercentVbat75_50)
+        } else if d1_active {
+            Ok(DeviceBatteryType::PercentVbat50_25)
+        } else {
+            Ok(DeviceBatteryType::PercentVbat25_0)
+        }
+    }
+}

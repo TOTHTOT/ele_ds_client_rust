@@ -9,6 +9,7 @@
       <w>mousefood</w>
       <w>netif</w>
       <w>psram</w>
+      <w>sclk</w>
       <w>sysloop</w>
       <w>vbat</w>
       <w>vmid</w>
