@@ -30,11 +30,11 @@ use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
-type Ssd1680DisplayType<'d> = Ssd1680<
-    SpiDeviceDriver<'d, SpiDriver<'d>>,
-    PinDriver<'d, AnyIOPin, Input>,  // BUSY
-    PinDriver<'d, AnyIOPin, Output>, // DC
-    PinDriver<'d, AnyIOPin, Output>, // RST
+type Ssd1680DisplayType = Ssd1680<
+    SpiDeviceDriver<'static, SpiDriver<'static>>,
+    PinDriver<'static, AnyIOPin, Input>,  // BUSY
+    PinDriver<'static, AnyIOPin, Output>, // DC
+    PinDriver<'static, AnyIOPin, Output>, // RST
 >;
 type Es8388Type = Es8388<
     'static,
@@ -47,28 +47,28 @@ pub struct DeviceStatus {
     sht3x_measure: Measurement,
 }
 #[allow(dead_code)]
-pub struct BoardPeripherals<'d> {
-    wifi: EspWifi<'d>,
+pub struct BoardPeripherals {
+    wifi: EspWifi<'static>,
     pub device_config: DeviceConfig,
     pub bw_buf: DisplayAnyIn,
     pub delay: Ets,
-    pub ssd1680: Ssd1680DisplayType<'d>,
+    pub ssd1680: Ssd1680DisplayType,
     pub es8388: Arc<Mutex<Es8388Type>>,
-    vout_3v3: PinDriver<'d, AnyIOPin, Output>,
-    sht3x_rst: PinDriver<'d, AnyIOPin, Output>,
+    vout_3v3: PinDriver<'static, AnyIOPin, Output>,
+    sht3x_rst: PinDriver<'static, AnyIOPin, Output>,
     pub sht3x: Sht3x<SharedI2cDevice<Arc<Mutex<I2cDriver<'static>>>>, Ets>,
     pub device_battery: DeviceBattery<
-        PinDriver<'d, AnyIOPin, Input>,
-        PinDriver<'d, AnyIOPin, Input>,
-        PinDriver<'d, AnyIOPin, Input>,
+        PinDriver<'static, AnyIOPin, Input>,
+        PinDriver<'static, AnyIOPin, Input>,
+        PinDriver<'static, AnyIOPin, Input>,
     >,
     pub device_button: DeviceButton,
     pub key_read_exit: Arc<AtomicBool>, // 发送信号让读按键线程退出
 }
 
 #[allow(dead_code)]
-impl<'d> BoardPeripherals<'d> {
-    pub fn new() -> anyhow::Result<BoardPeripherals<'d>> {
+impl BoardPeripherals {
+    pub fn new() -> anyhow::Result<BoardPeripherals> {
         let peripherals = Peripherals::take()?;
         let sysloop = EspSystemEventLoop::take()?;
         let nvs = EspNvsPartition::<NvsDefault>::take()?;
@@ -290,7 +290,7 @@ impl<'d> BoardPeripherals<'d> {
     }
 }
 
-impl<'d> Drop for BoardPeripherals<'d> {
+impl Drop for BoardPeripherals {
     fn drop(&mut self) {
         log::warn!("Dropping BoardPeripherals, close power");
         self.vout_3v3.set_low().unwrap();
