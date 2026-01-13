@@ -2,7 +2,6 @@ use crate::board::es8388::driver::{Es8388, RunMode};
 use crate::board::power_manage::DeviceBattery;
 use crate::board::share_i2c_bus::SharedI2cDevice;
 use crate::board::{es8388, get_clock_ntp, psram};
-use crate::communication::http_server::HttpServer;
 use crate::device_config::DeviceConfig;
 use crate::file_system::nvs_flash_filesystem_init;
 use anyhow::Context;
@@ -50,7 +49,6 @@ pub struct DeviceStatus {
 #[allow(dead_code)]
 pub struct BoardPeripherals<'d> {
     wifi: EspWifi<'d>,
-    http_server: HttpServer<'d>,
     pub device_config: DeviceConfig,
     pub bw_buf: DisplayAnyIn,
     pub delay: Ets,
@@ -156,11 +154,9 @@ impl<'d> BoardPeripherals<'d> {
         if let Err(e) = Self::wifi_connect(&mut wifi, &device_config) {
             log::warn!("Wifi connect error: {e:?}");
         }
-        let http_server = HttpServer::new()?;
 
         Ok(BoardPeripherals {
             wifi,
-            http_server,
             device_config,
             bw_buf: display_bw,
             delay,

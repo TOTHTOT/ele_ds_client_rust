@@ -1,4 +1,5 @@
 use ele_ds_client_rust::board::power_manage::next_minute_left_time;
+use ele_ds_client_rust::communication::http_server::HttpServer;
 use ele_ds_client_rust::ui::mouse_food_test;
 use ele_ds_client_rust::{
     board::peripheral::BoardPeripherals,
@@ -17,6 +18,9 @@ fn main() -> anyhow::Result<()> {
     board.device_config.boot_times_add()?;
     let board = Arc::new(Mutex::new(board));
     let mut ui_board = board.clone();
+
+    let _http_server = HttpServer::new()?;
+
     loop {
         {
             let mut board = board
