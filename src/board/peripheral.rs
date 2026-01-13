@@ -53,6 +53,7 @@ pub struct BoardPeripherals<'d> {
     pub es8388: Es8388Type<'d>,
     vout_3v3: PinDriver<'d, Gpio10, Output>,
     sht3x_rst: PinDriver<'d, Gpio19, Output>,
+    pub sht3x: Sht3x<SharedI2cDevice<I2cDriver<'d>>, Ets>,
     pub device_battery: DeviceBattery<
         PinDriver<'d, Gpio12, Input>,
         PinDriver<'d, Gpio13, Input>,
@@ -82,6 +83,31 @@ impl<'d> BoardPeripherals<'d> {
             PinDriver::input(peripherals.pins.gpio14)?,
         );
         log::info!("current battery: {:?}", device_battery.current_vbat()?);
+
+        let i2c_config = I2cConfig {
+            baudrate: Hertz(400_000),
+            sda_pullup_enabled: true,
+            scl_pullup_enabled: true,
+            timeout: None,
+            intr_flags: EnumSet::<InterruptType>::empty(),
+        };
+        let mut i2c_driver = I2cDriver::new(
+            peripherals.i2c0,
+            peripherals.pins.gpio8,
+            peripherals.pins.gpio18,
+            &i2c_config,
+        )?;
+
+        // 可能是底层库有bug, 必须先执行一遍i2c的读写操作才能进行后续读传感器, 不然会报错 ESP_ERR_TIMEOUT
+        Self::i2c_scan(&mut i2c_driver);
+        let iic_bus = Rc::new(RefCell::new(i2c_driver));
+        let mut sht3x = Sht3x::new(SharedI2cDevice(iic_bus.clone()), DEFAULT_I2C_ADDRESS, Ets);
+        sht3x.repeatability = Repeatability::High;
+        let result = sht3x
+            .single_measurement()
+            .map_err(|e| anyhow::anyhow!("get sht3x filed:{e:?}"))?;
+        log::info!("Single measurement: {result:?}");
+
         let spi = peripherals.spi2;
         let sclk = peripherals.pins.gpio4;
         let sdo = peripherals.pins.gpio5;
@@ -104,28 +130,7 @@ impl<'d> BoardPeripherals<'d> {
         let mut display_bw = DisplayAnyIn::bw(128, 296);
         display_bw.set_rotation(DisplayRotation::Rotate270);
 
-        let i2c_config = I2cConfig {
-            baudrate: Hertz(100_000),
-            sda_pullup_enabled: true,
-            scl_pullup_enabled: true,
-            timeout: None,
-            intr_flags: EnumSet::<InterruptType>::empty(),
-        };
-        let i2c_driver = I2cDriver::new(
-            peripherals.i2c0,
-            peripherals.pins.gpio8,
-            peripherals.pins.gpio18,
-            &i2c_config,
-        )?;
-        let iic_bus = Rc::new(RefCell::new(i2c_driver));
-        let mut sensor = Sht3x::new(SharedI2cDevice(iic_bus.clone()), DEFAULT_I2C_ADDRESS, Ets);
-        sensor.repeatability = Repeatability::High;
-        let result = sensor
-            .single_measurement()
-            .map_err(|e| anyhow::anyhow!("get sht3x filed:{e:?}"))?;
-        log::info!("Single measurement: {result:?}");
         let i2s = peripherals.i2s0;
-
         // i2s相关初始化
         let i2s_driver = I2sDriver::new_std_bidir(
             i2s,
@@ -162,8 +167,20 @@ impl<'d> BoardPeripherals<'d> {
             ssd1680,
             vout_3v3,
             sht3x_rst,
+            sht3x,
             device_battery,
         })
+    }
+
+    /// 测试功能, 检查总线上的i2c设备
+    pub fn i2c_scan(i2c: &mut I2cDriver) {
+        log::info!("Scanning I2C bus...");
+        for addr in 1..127 {
+            if i2c.write(addr, &[], 50).is_ok() {
+                log::info!("Found device at address: 0x{:02X}", addr);
+            }
+        }
+        log::info!("Scan complete.");
     }
 
     fn init_filesystem_load_config() -> anyhow::Result<DeviceConfig> {
