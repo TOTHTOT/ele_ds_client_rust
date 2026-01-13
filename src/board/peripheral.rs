@@ -8,7 +8,7 @@ use crate::file_system::nvs_flash_filesystem_init;
 use anyhow::Context;
 use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::{Circle, PrimitiveStyle, Rectangle};
-use embedded_sht3x::{Repeatability, Sht3x, DEFAULT_I2C_ADDRESS};
+use embedded_sht3x::{Measurement, Repeatability, Sht3x, DEFAULT_I2C_ADDRESS};
 use embedded_svc::wifi;
 use embedded_svc::wifi::AuthMethod;
 use enumset::EnumSet;
@@ -42,6 +42,11 @@ type Ssd1680DisplayType<'d> = Ssd1680<
 type Es8388Type<'d> = Es8388<'d, SharedI2cDevice<I2cDriver<'d>>, PinDriver<'d, Gpio20, Output>>;
 // type Es8388Type<'d> = Es8388<'d, I2cProxy<'d, I2cDriver<'d>>, PinDriver<'d, Gpio20, Output>>;
 
+#[derive(Debug)]
+#[allow(dead_code)]
+pub struct DeviceStatus {
+    sht3x_measure: Measurement,
+}
 #[allow(dead_code)]
 pub struct BoardPeripherals<'d> {
     wifi: EspWifi<'d>,
@@ -103,10 +108,6 @@ impl<'d> BoardPeripherals<'d> {
         let iic_bus = Rc::new(RefCell::new(i2c_driver));
         let mut sht3x = Sht3x::new(SharedI2cDevice(iic_bus.clone()), DEFAULT_I2C_ADDRESS, Ets);
         sht3x.repeatability = Repeatability::High;
-        let result = sht3x
-            .single_measurement()
-            .map_err(|e| anyhow::anyhow!("get sht3x filed:{e:?}"))?;
-        log::info!("Single measurement: {result:?}");
 
         let spi = peripherals.spi2;
         let sclk = peripherals.pins.gpio4;
@@ -170,6 +171,15 @@ impl<'d> BoardPeripherals<'d> {
             sht3x,
             device_battery,
         })
+    }
+
+    /// 一次性读取所有传感器数据接口, 保存在 DeviceStatus
+    pub fn read_all_sensor(&mut self) -> anyhow::Result<DeviceStatus> {
+        let sht3x_measure = self
+            .sht3x
+            .single_measurement()
+            .map_err(|e| anyhow::anyhow!("sht3x get data failed: {e:?}"))?;
+        Ok(DeviceStatus { sht3x_measure })
     }
 
     /// 测试功能, 检查总线上的i2c设备

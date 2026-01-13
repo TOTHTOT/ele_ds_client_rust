@@ -13,20 +13,18 @@ fn main() -> anyhow::Result<()> {
     // Bind the log crate to the ESP Logging facilities
     esp_idf_svc::log::EspLogger::initialize_default();
     log::info!("system start, build info: {} 12", env!("BUILD_TIME"));
-    let board = Arc::new(Mutex::new(BoardPeripherals::new()?));
+    let mut board = BoardPeripherals::new()?;
+    board.device_config.boot_times_add()?;
+    let board = Arc::new(Mutex::new(board));
     let mut ui_board = board.clone();
-
-    {
-        let mut board = board
-            .lock()
-            .map_err(|e| anyhow::anyhow!("lock board failed: {e:?}"))?;
-        board.device_config.boot_times_add()?;
-        // board
-        //     .ssd1680
-        //     .entry_sleep()
-        //     .map_err(|e| anyhow::anyhow!("ssd1680 entry sleep error: {e:?}"))?;
-    }
     loop {
+        {
+            let mut board = board
+                .lock()
+                .map_err(|e| anyhow::anyhow!("lock board failed: {e:?}"))?;
+            let device_status = board.read_all_sensor()?;
+            log::info!("device_status: {device_status:?}");
+        }
         mouse_food_test(&mut ui_board)?;
         std::thread::sleep(std::time::Duration::from_micros(next_minute_left_time()));
         // ele_ds_client_rust::power_manage::enter_deep_sleep_mode_per_minute();
