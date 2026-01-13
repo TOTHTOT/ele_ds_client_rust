@@ -26,11 +26,9 @@ use esp_idf_svc::nvs::{EspNvsPartition, NvsDefault};
 use esp_idf_svc::wifi::EspWifi;
 use ssd1680::color::Black;
 use ssd1680::prelude::{Display, DisplayAnyIn, DisplayRotation, Ssd1680};
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 type Ssd1680DisplayType<'d> = Ssd1680<
     SpiDeviceDriver<'d, SpiDriver<'d>>,
@@ -38,9 +36,12 @@ type Ssd1680DisplayType<'d> = Ssd1680<
     PinDriver<'d, AnyIOPin, Output>, // DC
     PinDriver<'d, AnyIOPin, Output>, // RST
 >;
-type Es8388Type<'d> = Es8388<'d, SharedI2cDevice<I2cDriver<'d>>, PinDriver<'d, AnyIOPin, Output>>;
-
-#[derive(Debug)]
+type Es8388Type = Es8388<
+    'static,
+    SharedI2cDevice<Arc<Mutex<I2cDriver<'static>>>>,
+    PinDriver<'static, AnyIOPin, Output>,
+>;
+#[derive(Debug, Default)]
 #[allow(dead_code)]
 pub struct DeviceStatus {
     sht3x_measure: Measurement,
@@ -52,10 +53,10 @@ pub struct BoardPeripherals<'d> {
     pub bw_buf: DisplayAnyIn,
     pub delay: Ets,
     pub ssd1680: Ssd1680DisplayType<'d>,
-    pub es8388: Es8388Type<'d>,
+    pub es8388: Arc<Mutex<Es8388Type>>,
     vout_3v3: PinDriver<'d, AnyIOPin, Output>,
     sht3x_rst: PinDriver<'d, AnyIOPin, Output>,
-    pub sht3x: Sht3x<SharedI2cDevice<I2cDriver<'d>>, Ets>,
+    pub sht3x: Sht3x<SharedI2cDevice<Arc<Mutex<I2cDriver<'static>>>>, Ets>,
     pub device_battery: DeviceBattery<
         PinDriver<'d, AnyIOPin, Input>,
         PinDriver<'d, AnyIOPin, Input>,
@@ -104,7 +105,7 @@ impl<'d> BoardPeripherals<'d> {
 
         // 可能是底层库有bug, 必须先执行一遍i2c的读写操作才能进行后续读传感器, 不然会报错 ESP_ERR_TIMEOUT
         Self::i2c_scan(&mut i2c_driver);
-        let iic_bus = Rc::new(RefCell::new(i2c_driver));
+        let iic_bus = Arc::new(Mutex::new(i2c_driver));
         let mut sht3x = Sht3x::new(SharedI2cDevice(iic_bus.clone()), DEFAULT_I2C_ADDRESS, Ets);
         sht3x.repeatability = Repeatability::High;
 
@@ -146,11 +147,11 @@ impl<'d> BoardPeripherals<'d> {
         let i2s_driver = I2sDriver::new_std_bidir(
             i2s,
             &es8388::driver::default_i2s_config(),
-            peripherals.pins.gpio47,
-            peripherals.pins.gpio45,
-            peripherals.pins.gpio1,
-            Some(peripherals.pins.gpio2),
-            peripherals.pins.gpio48,
+            peripherals.pins.gpio47,      // bclk i2s总线的时钟
+            peripherals.pins.gpio45,      // din codec支持录音功能可以把麦克风数据回传给单片机
+            peripherals.pins.gpio1,       // dout 音频输出
+            Some(peripherals.pins.gpio2), // mclk 给codec芯片提供的始终
+            peripherals.pins.gpio48,      // ws 左右声道选择
         )
         .context("Failed to initialize I2S bidirectional driver")?;
         let es8388_i2c = SharedI2cDevice(iic_bus.clone());
@@ -162,6 +163,12 @@ impl<'d> BoardPeripherals<'d> {
             es8388::driver::CHIP_ADDR,
             RunMode::AdcDac,
         );
+        let es8388 = Arc::new(Mutex::new(es8388));
+        let es8388_clone = es8388.clone();
+        std::thread::spawn(move || loop {
+            let mut es8388 = es8388_clone.lock().unwrap();
+            es8388.start().unwrap();
+        });
         let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
         if let Err(e) = Self::wifi_connect(&mut wifi, &device_config) {
             log::warn!("Wifi connect error: {e:?}");
