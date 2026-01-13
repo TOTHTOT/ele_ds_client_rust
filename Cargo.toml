@@ -47,6 +47,7 @@ embedded-sht3x = "0.1.0"
 #embedded-hal-bus = { version = "0.3.0", features = ["std"] }
 embedded-hal = "1.0.0"
 enumset = "1.1.10"
+button-driver = { version = "0.2.5", features = ["std", "embedded_hal"] }
 
 # b) With embassy-executor:
 # embassy-executor = { version = "0.7", features = ["executor-thread", "arch-std"] }

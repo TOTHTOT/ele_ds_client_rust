@@ -1,3 +1,4 @@
+use crate::board::button::DeviceButton;
 use crate::board::es8388::driver::{Es8388, RunMode};
 use crate::board::power_manage::DeviceBattery;
 use crate::board::share_i2c_bus::SharedI2cDevice;
@@ -14,8 +15,8 @@ use enumset::EnumSet;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::delay::Ets;
 use esp_idf_svc::hal::gpio::{
-    AnyIOPin, Gpio10, Gpio12, Gpio13, Gpio14, Gpio16, Gpio19, Gpio20, Gpio6, Gpio7, Input, Output,
-    PinDriver,
+    AnyIOPin, AnyInputPin, Gpio10, Gpio12, Gpio13, Gpio14, Gpio16, Gpio19, Gpio20, Gpio6, Gpio7,
+    Input, Output, PinDriver,
 };
 use esp_idf_svc::hal::i2c::{I2cConfig, I2cDriver};
 use esp_idf_svc::hal::i2s::I2sDriver;
@@ -31,6 +32,8 @@ use ssd1680::prelude::{Display, DisplayAnyIn, DisplayRotation, Ssd1680};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::str::FromStr;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 type Ssd1680DisplayType<'d> = Ssd1680<
     SpiDeviceDriver<'d, SpiDriver<'d>>,
@@ -62,6 +65,8 @@ pub struct BoardPeripherals<'d> {
         PinDriver<'d, Gpio13, Input>,
         PinDriver<'d, Gpio14, Input>,
     >,
+    pub device_button: DeviceButton,
+    pub key_read_exit: Arc<AtomicBool>, // 发送信号让读按键线程退出
 }
 
 #[allow(dead_code)]
@@ -106,6 +111,17 @@ impl<'d> BoardPeripherals<'d> {
         let iic_bus = Rc::new(RefCell::new(i2c_driver));
         let mut sht3x = Sht3x::new(SharedI2cDevice(iic_bus.clone()), DEFAULT_I2C_ADDRESS, Ets);
         sht3x.repeatability = Repeatability::High;
+
+        // 按键初始化
+        let (key_tx, _ket_rx) = std::sync::mpsc::channel();
+        let key_pins: Vec<AnyInputPin> = vec![
+            peripherals.pins.gpio3.into(),
+            peripherals.pins.gpio46.into(),
+            peripherals.pins.gpio9.into(),
+        ];
+        let key_read_exit = Arc::new(AtomicBool::new(false));
+        let key_read_exit_clone = key_read_exit.clone();
+        let device_button = DeviceButton::new(key_pins, key_tx, key_read_exit_clone)?;
 
         let spi = peripherals.spi2;
         let sclk = peripherals.pins.gpio4;
@@ -166,6 +182,8 @@ impl<'d> BoardPeripherals<'d> {
             sht3x_rst,
             sht3x,
             device_battery,
+            device_button,
+            key_read_exit,
         })
     }
 

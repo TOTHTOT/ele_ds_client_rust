@@ -1,3 +1,4 @@
+mod button;
 pub mod es8388;
 pub mod get_clock_ntp;
 pub mod peripheral;
