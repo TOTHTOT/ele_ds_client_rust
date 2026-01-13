@@ -65,7 +65,7 @@ where
             self.write_reg(Command::DacControl20, 0x90)?; // 右咪头声音不混入扬声器
             self.write_reg(Command::DacControl21, 0x80)?;
             self.write_reg(Command::DacControl23, 0x00)?; // 扬声器规格是8欧5w的
-            self.set_dac_volume(0)?; // 设置输入信号的增幅, 这里直接最大
+            self.set_dac_volume(100)?; // 设置输入信号的增幅, 这里直接最大
         }
 
         if self.mode == RunMode::Adc || self.mode == RunMode::AdcDac {
@@ -94,7 +94,6 @@ where
             self.write_reg(Command::DacControl20, 0x50)?;
             self.set_voice_volume(50)?;
         }
-
         Ok(())
     }
 
@@ -128,11 +127,14 @@ where
         Ok(())
     }
 
-    // pub fn read_all(&mut self) -> anyhow::Result<Vec<u8>> {
-    //     let mut buf: Vec<u8> = Vec::new();
-    //     for cmd in Command::
-    //     Ok(buf)
-    // }
+    pub fn read_all(&mut self) -> anyhow::Result<Vec<u8>> {
+        let mut buf: Vec<u8> = Vec::new();
+        for reg in 0..50 {
+            let tmp = self.read_reg(Command::from_reg_addr(reg).unwrap())?;
+            buf.push(tmp);
+        }
+        Ok(buf)
+    }
 
     /// 写入寄存器
     pub fn write_reg(&mut self, reg: Command, val: u8) -> anyhow::Result<()> {
@@ -154,9 +156,13 @@ where
     /// buffer: 16-bit PCM 数据
     /// timeout_ms: 写入超时时间
     pub fn write_audio(&mut self, data: &[u8], timeout_ms: u32) -> anyhow::Result<usize> {
-        self.i2s
+        self.set_speaker(true)?;
+        let size = self
+            .i2s
             .write(data, timeout_ms)
-            .map_err(|e| anyhow::anyhow!("I2S Write Error: {e:?}"))
+            .map_err(|e| anyhow::anyhow!("I2S Write Error: {e:?}"))?;
+        self.set_speaker(false)?;
+        Ok(size)
     }
 
     /// 录制音频 (读取 I2S)

@@ -156,18 +156,32 @@ impl BoardPeripherals {
         .context("Failed to initialize I2S bidirectional driver")?;
         let es8388_i2c = SharedI2cDevice(iic_bus.clone());
         let en_spk = PinDriver::output(peripherals.pins.gpio20.downgrade())?;
-        let es8388 = Es8388::new(
+        let mut es8388 = Es8388::new(
             i2s_driver,
             es8388_i2c,
             en_spk,
             es8388::driver::CHIP_ADDR,
             RunMode::AdcDac,
         );
+        es8388.init()?;
+        es8388.start()?;
+        es8388.set_speaker(true)?;
+        let regs = es8388.read_all()?;
+        log::info!("es8388 regs: {:?}", &regs);
         let es8388 = Arc::new(Mutex::new(es8388));
         let es8388_clone = es8388.clone();
         std::thread::spawn(move || loop {
             let mut es8388 = es8388_clone.lock().unwrap();
-            es8388.start().unwrap();
+            let buf = Box::new([100_u8; 1024]);
+            // if let Err(e) = es8388.read_audio(&mut *buf, 1000) {
+            //     log::error!("Failed to read audio buffer: {e:?}");
+            // }
+            // log::info!("es8388 = {buf:?}");
+            if let Err(e) = es8388.write_audio(&*buf, 1000) {
+                log::error!("Failed to write audio buffer: {e:?}");
+            }
+            log::info!("es8388: {:?}", &buf);
+            std::thread::sleep(std::time::Duration::from_millis(5000));
         });
         let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
         if let Err(e) = Self::wifi_connect(&mut wifi, &device_config) {
@@ -204,7 +218,7 @@ impl BoardPeripherals {
         log::info!("Scanning I2C bus...");
         for addr in 1..127 {
             if i2c.write(addr, &[], 50).is_ok() {
-                log::info!("Found device at address: 0x{:02X}", addr);
+                log::info!("Found device at address: 0x{addr:02X}");
             }
         }
         log::info!("Scan complete.");
