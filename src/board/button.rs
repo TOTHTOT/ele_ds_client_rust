@@ -86,3 +86,11 @@ impl DeviceButton {
         Ok(())
     }
 }
+impl Drop for DeviceButton {
+    fn drop(&mut self) {
+        if let Some(handle) = self.read_thread_handle.take() {
+            log::info!("Waiting for key thread to join...");
+            let _ = handle.join();
+        }
+    }
+}
