@@ -14,10 +14,7 @@ use embedded_svc::wifi::AuthMethod;
 use enumset::EnumSet;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::delay::Ets;
-use esp_idf_svc::hal::gpio::{
-    AnyIOPin, AnyInputPin, Gpio10, Gpio12, Gpio13, Gpio14, Gpio16, Gpio19, Gpio20, Gpio6, Gpio7,
-    Input, Output, PinDriver,
-};
+use esp_idf_svc::hal::gpio::{AnyIOPin, AnyInputPin, IOPin, Input, Output, PinDriver};
 use esp_idf_svc::hal::i2c::{I2cConfig, I2cDriver};
 use esp_idf_svc::hal::i2s::I2sDriver;
 use esp_idf_svc::hal::interrupt::InterruptType;
@@ -37,12 +34,11 @@ use std::sync::Arc;
 
 type Ssd1680DisplayType<'d> = Ssd1680<
     SpiDeviceDriver<'d, SpiDriver<'d>>,
-    PinDriver<'d, Gpio16, Input>, // BUSY
-    PinDriver<'d, Gpio7, Output>, // DC
-    PinDriver<'d, Gpio6, Output>, // RST
+    PinDriver<'d, AnyIOPin, Input>,  // BUSY
+    PinDriver<'d, AnyIOPin, Output>, // DC
+    PinDriver<'d, AnyIOPin, Output>, // RST
 >;
-type Es8388Type<'d> = Es8388<'d, SharedI2cDevice<I2cDriver<'d>>, PinDriver<'d, Gpio20, Output>>;
-// type Es8388Type<'d> = Es8388<'d, I2cProxy<'d, I2cDriver<'d>>, PinDriver<'d, Gpio20, Output>>;
+type Es8388Type<'d> = Es8388<'d, SharedI2cDevice<I2cDriver<'d>>, PinDriver<'d, AnyIOPin, Output>>;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -57,13 +53,13 @@ pub struct BoardPeripherals<'d> {
     pub delay: Ets,
     pub ssd1680: Ssd1680DisplayType<'d>,
     pub es8388: Es8388Type<'d>,
-    vout_3v3: PinDriver<'d, Gpio10, Output>,
-    sht3x_rst: PinDriver<'d, Gpio19, Output>,
+    vout_3v3: PinDriver<'d, AnyIOPin, Output>,
+    sht3x_rst: PinDriver<'d, AnyIOPin, Output>,
     pub sht3x: Sht3x<SharedI2cDevice<I2cDriver<'d>>, Ets>,
     pub device_battery: DeviceBattery<
-        PinDriver<'d, Gpio12, Input>,
-        PinDriver<'d, Gpio13, Input>,
-        PinDriver<'d, Gpio14, Input>,
+        PinDriver<'d, AnyIOPin, Input>,
+        PinDriver<'d, AnyIOPin, Input>,
+        PinDriver<'d, AnyIOPin, Input>,
     >,
     pub device_button: DeviceButton,
     pub key_read_exit: Arc<AtomicBool>, // 发送信号让读按键线程退出
@@ -81,14 +77,14 @@ impl<'d> BoardPeripherals<'d> {
         get_clock_ntp::set_time_zone(device_config.time_zone.as_str())?;
 
         // 基本io口初始化
-        let mut vout_3v3 = PinDriver::output(peripherals.pins.gpio10)?;
+        let mut vout_3v3 = PinDriver::output(peripherals.pins.gpio10.downgrade())?;
         vout_3v3.set_high()?;
-        let mut sht3x_rst = PinDriver::output(peripherals.pins.gpio19)?;
+        let mut sht3x_rst = PinDriver::output(peripherals.pins.gpio19.downgrade())?;
         sht3x_rst.set_high()?;
         let mut device_battery = DeviceBattery::new(
-            PinDriver::input(peripherals.pins.gpio12)?,
-            PinDriver::input(peripherals.pins.gpio13)?,
-            PinDriver::input(peripherals.pins.gpio14)?,
+            PinDriver::input(peripherals.pins.gpio12.downgrade())?,
+            PinDriver::input(peripherals.pins.gpio13.downgrade())?,
+            PinDriver::input(peripherals.pins.gpio14.downgrade())?,
         );
         log::info!("current battery: {:?}", device_battery.current_vbat()?);
 
@@ -126,10 +122,10 @@ impl<'d> BoardPeripherals<'d> {
         let spi = peripherals.spi2;
         let sclk = peripherals.pins.gpio4;
         let sdo = peripherals.pins.gpio5;
-        let rst = PinDriver::output(peripherals.pins.gpio6)?;
-        let dc = PinDriver::output(peripherals.pins.gpio7)?;
+        let rst = PinDriver::output(peripherals.pins.gpio6.downgrade())?;
+        let dc = PinDriver::output(peripherals.pins.gpio7.downgrade())?;
         let cs = peripherals.pins.gpio15;
-        let busy = PinDriver::input(peripherals.pins.gpio16)?;
+        let busy = PinDriver::input(peripherals.pins.gpio16.downgrade())?;
 
         let spi = SpiDriver::new(
             spi,
@@ -158,7 +154,7 @@ impl<'d> BoardPeripherals<'d> {
         )
         .context("Failed to initialize I2S bidirectional driver")?;
         let es8388_i2c = SharedI2cDevice(iic_bus.clone());
-        let en_spk = PinDriver::output(peripherals.pins.gpio20)?;
+        let en_spk = PinDriver::output(peripherals.pins.gpio20.downgrade())?;
         let es8388 = Es8388::new(
             i2s_driver,
             es8388_i2c,
