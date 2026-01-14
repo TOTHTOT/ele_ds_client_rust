@@ -19,6 +19,11 @@ fn main() -> anyhow::Result<()> {
     log::info!("system start, build info: {} 12", env!("BUILD_TIME"));
     let mut board = BoardPeripherals::new()?;
     board.device_config.boot_times_add()?;
+    {
+        let sensor_data = board.read_all_sensor()?;
+        let mut screen = board.screen.lock().map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        screen.last_sensor_status = Some(sensor_data);
+    }
     let screen = board.screen.clone();
     let screen_main = board.screen.clone();
     let screen_exit = board.screen_exit.clone();
@@ -78,6 +83,7 @@ fn main() -> anyhow::Result<()> {
             .lock()
             .map_err(|e| anyhow::anyhow!("lock board failed: {e:?}"))?;
         screen.last_sensor_status = Some(board.read_all_sensor()?);
+        log::info!("last sensor_status: {:?}", screen.last_sensor_status);
 
         /* 界面更新区分两种情况:
             1. 如果一直在运行状态时每分钟更新时间, 这时要发信号
@@ -99,8 +105,8 @@ fn main() -> anyhow::Result<()> {
 
         loop_times += 1;
         psram::check_psram();
-        std::thread::sleep(std::time::Duration::from_micros(sleep_time));
-        // ele_ds_client_rust::power_manage::enter_deep_sleep_mode_per_minute();
+        // std::thread::sleep(std::time::Duration::from_micros(sleep_time));
+        ele_ds_client_rust::board::power_manage::enter_deep_sleep_mode_per_minute();
     }
 }
 
