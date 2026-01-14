@@ -1,3 +1,4 @@
+use crate::ActivePage;
 use chrono::Datelike;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -46,6 +47,7 @@ pub struct DeviceConfig {
     pub city_name: String,                 // 所在城市地点, 获取天气
     pub wifi_connect_interval: u32,        // WiFi 连接的电源周期间隔, 和 boot_times 一起用
     pub boot_times: u32,                   // 重启次数
+    pub current_page: ActivePage,
 }
 
 impl Default for DeviceConfig {
@@ -61,6 +63,7 @@ impl Default for DeviceConfig {
             city_name: "Fuzhou".to_string(),
             wifi_connect_interval: 60,
             boot_times: 0,
+            current_page: ActivePage::default(),
         }
     }
 }

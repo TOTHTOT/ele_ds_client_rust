@@ -1,6 +1,7 @@
-use crate::board::peripheral::{ActivePage, Screen};
+use crate::board::peripheral::Screen;
 use crate::ui::home_page::HomePageInfo;
 use crate::ui::sensor_page::SensorPage;
+use crate::ActivePage;
 use anyhow::anyhow;
 use mousefood::prelude::{Frame, Rect, Style, Stylize};
 use mousefood::ratatui::widgets::Block;
@@ -27,16 +28,17 @@ pub fn mouse_food_test(
     screen: Arc<Mutex<Screen>>,
     set_active_page: ActivePage,
 ) -> anyhow::Result<()> {
-    let pages = [HomePageInfo::build_home_page, SensorPage::build_sensor_page];
     let mut screen = screen.lock().map_err(|_| anyhow!("Mutex lock error"))?;
-    if set_active_page == screen.current_page {
+    if set_active_page == screen.current_page && !set_active_page.cur_set_page_is_need_refresh() {
         return Ok(());
     }
+    match set_active_page {
+        ActivePage::Sensor => SensorPage::build_sensor_page(&mut screen)?,
+        ActivePage::Home => HomePageInfo::build_home_page(&mut screen)?,
+        ActivePage::Image => anyhow::bail!("not support now"),
+        _ => anyhow::bail!("Not find selected page: {set_active_page:?}"),
+    }
     screen.current_page = set_active_page;
-    let page = pages
-        .get(screen.current_page as usize)
-        .ok_or(anyhow!("Page not found"))?;
-    page(&mut screen)?;
     // 单独解构这些, 避免借用问题
     let Screen {
         ref mut ssd1680,

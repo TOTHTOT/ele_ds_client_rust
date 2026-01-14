@@ -1,11 +1,45 @@
 // src/lib.rs
 
+use serde::{Deserialize, Serialize};
+
 pub mod board;
 pub mod cmd_menu;
 pub mod communication;
 pub mod device_config;
 pub mod file_system;
 pub mod ui;
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[repr(usize)]
+pub enum ActivePage {
+    Sensor,
+    #[default]
+    Home,
+    Image,
+    Setting,
+    About,
+}
+
+impl ActivePage {
+    /// 当前页面是否需要在每次收到更新命令时刷新
+    pub fn cur_set_page_is_need_refresh(self) -> bool {
+        if self == ActivePage::Home || self == ActivePage::Sensor {
+            return true;
+        }
+        false
+    }
+}
+impl TryFrom<usize> for ActivePage {
+    type Error = anyhow::Error;
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(ActivePage::Sensor),
+            1 => Ok(ActivePage::Home),
+            2 => Ok(ActivePage::Image),
+            _ => Err(anyhow::anyhow!("Invalid ActivePage value: {}", value)),
+        }
+    }
+}
 
 pub const SERVER_CERT: &str = "-----BEGIN CERTIFICATE-----\n\
 MIIDYjCCAkqgAwIBAgIUW8aMRyWSarT0jjgQTlHzlRbtVQEwDQYJKoZIhvcNAQEL\n\

@@ -5,6 +5,7 @@ use crate::board::share_i2c_bus::SharedI2cDevice;
 use crate::board::{es8388, get_clock_ntp, psram};
 use crate::device_config::DeviceConfig;
 use crate::file_system::nvs_flash_filesystem_init;
+use crate::ActivePage;
 use anyhow::Context;
 use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::{Circle, PrimitiveStyle, Rectangle};
@@ -46,26 +47,6 @@ type Es8388Type = Es8388<
 pub struct DeviceStatus {
     sht3x_measure: Measurement,
 }
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-#[repr(usize)]
-pub enum ActivePage {
-    #[default]
-    Home = 0,
-    Sensor = 1,
-    Image = 2,
-}
-impl TryFrom<usize> for ActivePage {
-    type Error = anyhow::Error;
-    fn try_from(value: usize) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(ActivePage::Home),
-            1 => Ok(ActivePage::Sensor),
-            2 => Ok(ActivePage::Image),
-            _ => Err(anyhow::anyhow!("Invalid ActivePage value: {}", value)),
-        }
-    }
-}
-
 // 屏幕对象
 pub struct Screen {
     pub ssd1680: Ssd1680DisplayType,
@@ -82,6 +63,7 @@ impl Screen {
         rst: PinDriver<'static, AnyIOPin, Output>,
         mut width: u16,
         mut height: u16,
+        current_page: ActivePage,
     ) -> anyhow::Result<Self> {
         let mut delay = Ets;
         width = width.max(128);
@@ -94,7 +76,7 @@ impl Screen {
         Ok(Self {
             ssd1680,
             bw_buf,
-            current_page: ActivePage::default(),
+            current_page,
             delay,
         })
     }
@@ -217,7 +199,15 @@ impl BoardPeripherals {
         )?;
         let spi = SpiDeviceDriver::new(spi, Some(cs), &spi::config::Config::new())?;
         let screen_exit = Arc::new(AtomicBool::new(false));
-        let screen = Arc::new(Mutex::new(Screen::new(spi, busy, dc, rst, 128, 296)?));
+        let screen = Arc::new(Mutex::new(Screen::new(
+            spi,
+            busy,
+            dc,
+            rst,
+            128,
+            296,
+            device_config.current_page,
+        )?));
 
         let i2s = peripherals.i2s0;
         // i2s相关初始化
@@ -260,10 +250,10 @@ impl BoardPeripherals {
         //     log::info!("es8388: {:?}", &buf);
         //     std::thread::sleep(std::time::Duration::from_millis(5000));
         // });
-        let wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
-        // if let Err(e) = Self::wifi_connect(&mut wifi, &device_config) {
-        //     log::warn!("Wifi connect error: {e:?}");
-        // }
+        let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
+        if let Err(e) = Self::wifi_connect(&mut wifi, &device_config) {
+            log::warn!("Wifi connect error: {e:?}");
+        }
 
         Ok(BoardPeripherals {
             wifi,

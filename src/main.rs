@@ -1,11 +1,11 @@
 use ele_ds_client_rust::board::button::KeyClickedType;
-use ele_ds_client_rust::board::peripheral::ActivePage;
 use ele_ds_client_rust::board::power_manage::next_minute_left_time;
 use ele_ds_client_rust::communication::http_server::HttpServer;
 use ele_ds_client_rust::ui::mouse_food_test;
 use ele_ds_client_rust::{
     board::peripheral::BoardPeripherals,
     communication::{http_client, ota},
+    ActivePage,
 };
 use std::sync::{Arc, Mutex};
 
@@ -19,10 +19,14 @@ fn main() -> anyhow::Result<()> {
     let mut board = BoardPeripherals::new()?;
     board.device_config.boot_times_add()?;
     let screen = board.screen.clone();
+    let screen_main = board.screen.clone();
     let screen_exit = board.screen_exit.clone();
     let key_exit = board.key_read_exit.clone();
 
-    let (key_tx, screen_rx) = std::sync::mpsc::channel();
+    let (screen_tx, screen_rx) = std::sync::mpsc::channel();
+    let screen_tx_main = screen_tx.clone();
+    // 上电同步掉电时的页面, 避免保存的页面和实际不一样
+    screen_tx_main.send(board.device_config.current_page)?;
     // 屏幕刷新线程
     let _ = std::thread::Builder::new()
         .stack_size(1024 * 10)
@@ -51,7 +55,7 @@ fn main() -> anyhow::Result<()> {
             };
             if key_info.click_type == KeyClickedType::SingleClicked {
                 if let Ok(cur_set_page) = ActivePage::try_from(key_info.idx) {
-                    if let Err(e) = key_tx.send(cur_set_page) {
+                    if let Err(e) = screen_tx.send(cur_set_page) {
                         log::warn!("refresh active_page failed: {e:?}");
                     }
                 }
@@ -63,16 +67,36 @@ fn main() -> anyhow::Result<()> {
     let board = Arc::new(Mutex::new(board));
 
     let _http_server = HttpServer::new()?;
-
+    let mut loop_times = 0; // 不断电情况下的循环次数, 可以控制一些第一次循环不执行的功能
     loop {
-        {
-            let mut board = board
-                .lock()
-                .map_err(|e| anyhow::anyhow!("lock board failed: {e:?}"))?;
-            let device_status = board.read_all_sensor()?;
-            log::info!("device_status: {device_status:?}");
+        let mut sleep_time = u64::MAX;
+        let mut board = board
+            .lock()
+            .map_err(|e| anyhow::anyhow!("lock board failed: {e:?}"))?;
+        let device_status = board.read_all_sensor()?;
+        log::info!("device_status: {device_status:?}");
+        // home界面下时间更新
+        let screen = screen_main
+            .lock()
+            .map_err(|e| anyhow::anyhow!("lock board failed: {e:?}"))?;
+        /* 区分两种情况:
+            1. 如果一直在运行状态时每分钟更新时间, 这时要发信号
+            2. 如果是从深度睡眠唤醒, 这时就不要再发信号了, 但是还没做
+        */
+        if screen.current_page.cur_set_page_is_need_refresh() && loop_times > 1 {
+            screen_tx_main.send(screen.current_page)?;
         }
-        std::thread::sleep(std::time::Duration::from_micros(next_minute_left_time()));
+        if screen.current_page == ActivePage::Home || screen.current_page == ActivePage::Sensor {
+            // 如果当前是主页面或者传感器页面就定时刷新数据, 不然的话就睡眠最大时间
+            sleep_time = next_minute_left_time();
+        }
+        board.device_config.current_page = screen.current_page;
+        board.device_config.save_config()?;
+        drop(screen);
+        drop(board);
+
+        loop_times += 1;
+        std::thread::sleep(std::time::Duration::from_micros(sleep_time));
         // ele_ds_client_rust::power_manage::enter_deep_sleep_mode_per_minute();
     }
 }
