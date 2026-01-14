@@ -98,7 +98,8 @@ impl HomePageInfo {
             if let Ok(data) = std::fs::read(&path) {
                 if let Ok(bmp) = Bmp::<BinaryColor>::from_slice(&data) {
                     let img = Image::new(&bmp, Point::new(current_x, y_position));
-                    img.draw(buf).unwrap();
+                    img.draw(buf)
+                        .map_err(|e| anyhow::anyhow!("pad_time_date filed: {e:?}"))?;
                     current_x += (bmp.size().width + 4) as i32;
                 }
             }

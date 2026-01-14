@@ -130,7 +130,10 @@ where
     pub fn read_all(&mut self) -> anyhow::Result<Vec<u8>> {
         let mut buf: Vec<u8> = Vec::new();
         for reg in 0..50 {
-            let tmp = self.read_reg(Command::from_reg_addr(reg).unwrap())?;
+            let Some(cmd) = Command::from_reg_addr(reg) else {
+                continue;
+            };
+            let tmp = self.read_reg(cmd)?;
             buf.push(tmp);
         }
         Ok(buf)

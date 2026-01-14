@@ -29,7 +29,9 @@ fn main() -> anyhow::Result<()> {
         .name(String::from("epd"))
         .spawn(move || {
             while !screen_exit.load(std::sync::atomic::Ordering::Relaxed) {
-                let cur_set_page = screen_rx.recv().unwrap();
+                let Ok(cur_set_page) = screen_rx.recv() else {
+                    continue;
+                };
                 let screen = screen.clone();
                 log::info!("cur_set page: {cur_set_page:?}");
                 if let Err(e) = mouse_food_test(screen, cur_set_page) {
@@ -43,10 +45,15 @@ fn main() -> anyhow::Result<()> {
     let key_rx = board.key_rx.take().expect("key rx, take filed");
     std::thread::spawn(move || {
         while !key_exit.load(std::sync::atomic::Ordering::Relaxed) {
-            let key_info = key_rx.recv().unwrap();
+            let Ok(key_info) = key_rx.recv() else {
+                log::warn!("key receive failed");
+                continue;
+            };
             if key_info.click_type == KeyClickedType::SingleClicked {
                 if let Ok(cur_set_page) = ActivePage::try_from(key_info.idx) {
-                    key_tx.send(cur_set_page).unwrap();
+                    if let Err(e) = key_tx.send(cur_set_page) {
+                        log::warn!("refresh active_page failed: {e:?}");
+                    }
                 }
             }
             log::info!("{key_info:?}");

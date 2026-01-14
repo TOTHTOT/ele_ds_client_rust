@@ -100,21 +100,27 @@ impl Screen {
     }
     /// 测试屏幕刷新是否正常, 画圆形和方块
     pub fn test_epd_display(&mut self) -> anyhow::Result<()> {
-        self.ssd1680.clear_bw_frame().unwrap();
+        self.ssd1680
+            .clear_bw_frame()
+            .map_err(|e| anyhow::anyhow!("Ssd1680 test_epd_display() error: {e:?}"))?;
 
         self.bw_buf.set_rotation(DisplayRotation::Rotate270);
         Rectangle::new(Point::new(0, 20), Size::new(40, 40))
             .into_styled(PrimitiveStyle::with_fill(Black))
             .draw(&mut self.bw_buf)
-            .unwrap();
+            .map_err(|e| anyhow::anyhow!("Ssd1680 error: {e:?}"))?;
 
         Circle::new(Point::new(80, 80), 40)
             .into_styled(PrimitiveStyle::with_fill(Black))
             .draw(&mut self.bw_buf)
-            .unwrap();
+            .map_err(|e| anyhow::anyhow!("Ssd1680 error: {e:?}"))?;
         log::info!("Send bw frame to display");
-        self.ssd1680.update_bw_frame(self.bw_buf.buffer()).unwrap();
-        self.ssd1680.display_frame(&mut self.delay).unwrap();
+        self.ssd1680
+            .update_bw_frame(self.bw_buf.buffer())
+            .map_err(|e| anyhow::anyhow!("Ssd1680 error: {e:?}"))?;
+        self.ssd1680
+            .display_frame(&mut self.delay)
+            .map_err(|e| anyhow::anyhow!("Ssd1680 error: {e:?}"))?;
         Ok(())
     }
 }
@@ -365,6 +371,6 @@ impl Drop for BoardPeripherals {
         self.key_read_exit
             .store(true, std::sync::atomic::Ordering::Relaxed);
         log::warn!("Dropping BoardPeripherals, close power");
-        self.vout_3v3.set_low().unwrap();
+        self.vout_3v3.set_low().expect("failed to set low on drop");
     }
 }

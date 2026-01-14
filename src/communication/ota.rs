@@ -100,21 +100,12 @@ impl Ota {
 
     /// 同步服务器版本
     pub fn sync_firmware(&self) -> anyhow::Result<()> {
-        let is_need_upgrade = self.is_need_upgrade();
-        match is_need_upgrade {
-            Ok(t) => {
-                if t.is_some() {
-                    log::info!("System need upgrade, {t:?}");
-                    self.get_upgrade_file(&t.unwrap())?;
-                } else {
-                    log::info!("System is last");
-                }
-                Ok(())
-            }
-            Err(e) => {
-                log::error!("{e}");
-                Err(e)
-            }
-        }
+        let is_need_upgrade = self.is_need_upgrade()?;
+        let Some(t) = is_need_upgrade else {
+            log::info!("System is last");
+            return Ok(());
+        };
+        log::info!("System need upgrade, {t:?}");
+        self.get_upgrade_file(&t)
     }
 }
