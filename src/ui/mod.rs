@@ -1,4 +1,4 @@
-use crate::board::peripheral::Screen;
+use crate::board::peripheral::{AllSensorData, Screen};
 use crate::ui::home_page::HomePageInfo;
 use crate::ui::sensor_page::SensorPage;
 use crate::ActivePage;
@@ -11,10 +11,9 @@ use std::sync::{Arc, Mutex};
 pub mod home_page;
 pub mod sensor_page;
 #[derive(Default)]
-
 pub struct UiInfo {
-    home: HomePageInfo,
-    sensor: SensorPage,
+    pub home: HomePageInfo,
+    pub sensor: SensorPage,
 }
 
 /// 用于包裹 ssd1680返回的错误
@@ -32,9 +31,25 @@ pub fn mouse_food_test(
     if set_active_page == screen.current_page && !set_active_page.cur_set_page_is_need_refresh() {
         return Ok(());
     }
+    let home = HomePageInfo {
+        net_state: false,
+        weather_info: [
+            "Sunny 25℃".to_string(),
+            "Sunny 25℃".to_string(),
+            "Sunny 25℃".to_string(),
+        ],
+        battery: 100,
+        city: "Fuzhou".to_string(),
+    };
+    let sensor = SensorPage {
+        sensor_data: screen
+            .last_sensor_status
+            .unwrap_or(AllSensorData::default()),
+    };
+    let mut info = UiInfo { home, sensor };
     match set_active_page {
-        ActivePage::Sensor => SensorPage::build_sensor_page(&mut screen)?,
-        ActivePage::Home => HomePageInfo::build_home_page(&mut screen)?,
+        ActivePage::Sensor => SensorPage::build_sensor_page(&mut screen, &mut info)?,
+        ActivePage::Home => HomePageInfo::build_home_page(&mut screen, &mut info)?,
         ActivePage::Image => anyhow::bail!("not support now"),
         _ => anyhow::bail!("Not find selected page: {set_active_page:?}"),
     }

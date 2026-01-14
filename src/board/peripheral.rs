@@ -2,7 +2,7 @@ use crate::board::button::{DeviceButton, PressedKeyInfo};
 use crate::board::es8388::driver::{Es8388, RunMode};
 use crate::board::power_manage::DeviceBattery;
 use crate::board::share_i2c_bus::SharedI2cDevice;
-use crate::board::{es8388, get_clock_ntp, psram};
+use crate::board::{es8388, get_clock_ntp};
 use crate::device_config::DeviceConfig;
 use crate::file_system::nvs_flash_filesystem_init;
 use crate::ActivePage;
@@ -42,10 +42,10 @@ type Es8388Type = Es8388<
     SharedI2cDevice<Arc<Mutex<I2cDriver<'static>>>>,
     PinDriver<'static, AnyIOPin, Output>,
 >;
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Copy, Clone)]
 #[allow(dead_code)]
-pub struct DeviceStatus {
-    sht3x_measure: Measurement,
+pub struct AllSensorData {
+    pub sht3x_measure: Measurement,
 }
 // 屏幕对象
 pub struct Screen {
@@ -53,6 +53,7 @@ pub struct Screen {
     pub bw_buf: DisplayAnyIn,
     pub current_page: ActivePage,
     pub delay: Ets,
+    pub last_sensor_status: Option<AllSensorData>,
 }
 
 impl Screen {
@@ -78,6 +79,7 @@ impl Screen {
             bw_buf,
             current_page,
             delay,
+            last_sensor_status: None,
         })
     }
     /// 测试屏幕刷新是否正常, 画圆形和方块
@@ -135,7 +137,6 @@ impl BoardPeripherals {
         let peripherals = Peripherals::take()?;
         let sysloop = EspSystemEventLoop::take()?;
         let nvs = EspNvsPartition::<NvsDefault>::take()?;
-        psram::check_psram();
 
         let device_config = BoardPeripherals::init_filesystem_load_config()?;
         get_clock_ntp::set_time_zone(device_config.time_zone.as_str())?;
@@ -274,12 +275,12 @@ impl BoardPeripherals {
     }
 
     /// 一次性读取所有传感器数据接口, 保存在 DeviceStatus
-    pub fn read_all_sensor(&mut self) -> anyhow::Result<DeviceStatus> {
+    pub fn read_all_sensor(&mut self) -> anyhow::Result<AllSensorData> {
         let sht3x_measure = self
             .sht3x
             .single_measurement()
             .map_err(|e| anyhow::anyhow!("sht3x get data failed: {e:?}"))?;
-        Ok(DeviceStatus { sht3x_measure })
+        Ok(AllSensorData { sht3x_measure })
     }
 
     /// 测试功能, 检查总线上的i2c设备

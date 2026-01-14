@@ -1,5 +1,6 @@
 use ele_ds_client_rust::board::button::KeyClickedType;
 use ele_ds_client_rust::board::power_manage::next_minute_left_time;
+use ele_ds_client_rust::board::psram;
 use ele_ds_client_rust::communication::http_server::HttpServer;
 use ele_ds_client_rust::ui::mouse_food_test;
 use ele_ds_client_rust::{
@@ -73,13 +74,12 @@ fn main() -> anyhow::Result<()> {
         let mut board = board
             .lock()
             .map_err(|e| anyhow::anyhow!("lock board failed: {e:?}"))?;
-        let device_status = board.read_all_sensor()?;
-        log::info!("device_status: {device_status:?}");
-        // home界面下时间更新
-        let screen = screen_main
+        let mut screen = screen_main
             .lock()
             .map_err(|e| anyhow::anyhow!("lock board failed: {e:?}"))?;
-        /* 区分两种情况:
+        screen.last_sensor_status = Some(board.read_all_sensor()?);
+
+        /* 界面更新区分两种情况:
             1. 如果一直在运行状态时每分钟更新时间, 这时要发信号
             2. 如果是从深度睡眠唤醒, 这时就不要再发信号了, 但是还没做
         */
@@ -90,12 +90,15 @@ fn main() -> anyhow::Result<()> {
             // 如果当前是主页面或者传感器页面就定时刷新数据, 不然的话就睡眠最大时间
             sleep_time = next_minute_left_time();
         }
-        board.device_config.current_page = screen.current_page;
-        board.device_config.save_config()?;
+        if board.device_config.current_page != screen.current_page {
+            board.device_config.current_page = screen.current_page;
+            board.device_config.save_config()?;
+        }
         drop(screen);
         drop(board);
 
         loop_times += 1;
+        psram::check_psram();
         std::thread::sleep(std::time::Duration::from_micros(sleep_time));
         // ele_ds_client_rust::power_manage::enter_deep_sleep_mode_per_minute();
     }

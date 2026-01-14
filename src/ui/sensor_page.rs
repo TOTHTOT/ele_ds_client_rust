@@ -1,26 +1,16 @@
+use crate::board::peripheral::AllSensorData;
 use crate::ui::{general_block, Screen, UiInfo};
 use mousefood::prelude::{Alignment, Constraint, Direction, Frame, Layout, Terminal};
 use mousefood::ratatui::widgets::Paragraph;
 use mousefood::{fonts, EmbeddedBackend, EmbeddedBackendConfig};
+use std::default::Default;
 
+#[derive(Default)]
 pub struct SensorPage {
-    temp: f32,
-    humi: f32,
-    press: u16,
-    lux: u16,
-}
-impl Default for SensorPage {
-    fn default() -> SensorPage {
-        Self {
-            temp: 0.0,
-            humi: 0.0,
-            press: 0,
-            lux: 0,
-        }
-    }
+    pub sensor_data: AllSensorData,
 }
 impl SensorPage {
-    pub fn build_sensor_page(screen: &mut Screen) -> anyhow::Result<()> {
+    pub fn build_sensor_page(screen: &mut Screen, info: &mut UiInfo) -> anyhow::Result<()> {
         {
             let config = EmbeddedBackendConfig {
                 font_regular: fonts::MONO_6X13,
@@ -28,11 +18,11 @@ impl SensorPage {
             };
             let backend = EmbeddedBackend::new(&mut screen.bw_buf, config);
             let mut terminal = Terminal::new(backend)?;
-            terminal.draw(|f| Self::sensor_page(f, UiInfo::default()))?;
+            terminal.draw(|f| Self::sensor_page(f, info))?;
         }
         Ok(())
     }
-    fn sensor_page(f: &mut Frame, info: UiInfo) {
+    fn sensor_page(f: &mut Frame, info: &mut UiInfo) {
         let main_area = general_block(f, &info.home);
 
         let chunks = Layout::default()
@@ -48,10 +38,16 @@ impl SensorPage {
             .split(main_area);
 
         let sensors = [
-            ("TEMP", format!("{:.1} C", info.sensor.temp)),
-            ("HUMI", format!("{:.1} %", info.sensor.humi)),
-            ("PRES", format!("{:.0} hPa", info.sensor.press)),
-            ("LUX ", format!("{} lx", info.sensor.lux)),
+            (
+                "TEMP",
+                format!("{:.1} C", info.sensor.sensor_data.sht3x_measure.temperature),
+            ),
+            (
+                "HUMI",
+                format!("{:.1} %", info.sensor.sensor_data.sht3x_measure.humidity),
+            ),
+            ("PRES", format!("{:.0} hPa", 0)),
+            ("LUX ", format!("{} lx", 0)),
         ];
 
         for (i, (label, value)) in sensors.iter().enumerate() {

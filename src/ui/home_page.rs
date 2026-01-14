@@ -1,5 +1,5 @@
 use crate::board::peripheral::Screen;
-use crate::ui::general_block;
+use crate::ui::{general_block, UiInfo};
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::{image::Image, prelude::*};
 use mousefood::prelude::*;
@@ -12,6 +12,7 @@ pub struct HomePageInfo {
     pub net_state: bool,
     pub weather_info: [String; 3],
     pub battery: u8,
+    pub city: String,
 }
 impl Default for HomePageInfo {
     fn default() -> Self {
@@ -23,11 +24,12 @@ impl Default for HomePageInfo {
                 "Sunny 25℃".to_string(),
             ],
             battery: 100,
+            city: "Fuzhou".to_string(),
         }
     }
 }
 impl HomePageInfo {
-    pub fn build_home_page(screen: &mut Screen) -> anyhow::Result<()> {
+    pub fn build_home_page(screen: &mut Screen, info: &mut UiInfo) -> anyhow::Result<()> {
         {
             let config = EmbeddedBackendConfig {
                 font_regular: fonts::MONO_6X13,
@@ -35,14 +37,14 @@ impl HomePageInfo {
             };
             let backend = EmbeddedBackend::new(&mut screen.bw_buf, config);
             let mut terminal = Terminal::new(backend)?;
-            terminal.draw(|f| Self::home_page(f, HomePageInfo::default()))?;
+            terminal.draw(|f| Self::home_page(f, &info.home))?;
         }
         Self::pad_time_date(&mut screen.bw_buf)?;
         Ok(())
     }
 
-    fn home_page(f: &mut Frame, info: HomePageInfo) {
-        let main_area = general_block(f, &info);
+    fn home_page(f: &mut Frame, info: &HomePageInfo) {
+        let main_area = general_block(f, info);
 
         // 将内部区域垂直切分为 Clock (60%) 和 Weather (40%)
         let main_chunks = Layout::default()
@@ -77,7 +79,7 @@ impl HomePageInfo {
         f.render_widget(
             Paragraph::new(weather_content)
                 .alignment(Alignment::Left)
-                .block(Block::bordered().title(" Weather ")),
+                .block(Block::bordered().title(format!(" {} Weather ", info.city))),
             main_chunks[1],
         );
     }
