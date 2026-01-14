@@ -14,8 +14,8 @@ pub enum KeyClickedType {
 /// 按下按键时发送的消息
 #[derive(Debug, PartialEq)]
 pub struct PressedKeyInfo {
-    idx: usize,                 // 按键索引, 按照传入的容器顺序
-    click_type: KeyClickedType, // 按下按键类型
+    pub idx: usize,                 // 按键索引, 按照传入的容器顺序
+    pub click_type: KeyClickedType, // 按下按键类型
 }
 
 /// 按键设备
@@ -73,7 +73,7 @@ impl DeviceButton {
                 }
                 if click_type != KeyClickedType::NoClick {
                     let key_msg = PressedKeyInfo { idx, click_type };
-                    log::info!("send key msg: {key_msg:?}");
+                    // log::info!("send key msg: {key_msg:?}");
                     if let Err(e) = tx.send(key_msg) {
                         log::error!("key msg send failed: {e:?}");
                     }

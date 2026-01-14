@@ -1,9 +1,7 @@
-use crate::ui::{general_block, BoardPeripherals, UiInfo};
-use anyhow::anyhow;
+use crate::ui::{general_block, Screen, UiInfo};
 use mousefood::prelude::{Alignment, Constraint, Direction, Frame, Layout, Terminal};
 use mousefood::ratatui::widgets::Paragraph;
 use mousefood::{fonts, EmbeddedBackend, EmbeddedBackendConfig};
-use std::sync::{Arc, Mutex};
 
 pub struct SensorPage {
     temp: f32,
@@ -22,14 +20,13 @@ impl Default for SensorPage {
     }
 }
 impl SensorPage {
-    pub fn build_sensor_page(board: Arc<Mutex<BoardPeripherals>>) -> anyhow::Result<()> {
+    pub fn build_sensor_page(screen: &mut Screen) -> anyhow::Result<()> {
         {
-            let mut board = board.lock().map_err(|_| anyhow!("Mutex lock error"))?;
             let config = EmbeddedBackendConfig {
                 font_regular: fonts::MONO_6X13,
                 ..Default::default()
             };
-            let backend = EmbeddedBackend::new(&mut board.bw_buf, config);
+            let backend = EmbeddedBackend::new(&mut screen.bw_buf, config);
             let mut terminal = Terminal::new(backend)?;
             terminal.draw(|f| Self::sensor_page(f, UiInfo::default()))?;
         }

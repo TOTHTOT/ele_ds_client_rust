@@ -1,12 +1,11 @@
-use crate::board::peripheral::BoardPeripherals;
+use crate::board::peripheral::Screen;
 use crate::ui::general_block;
-use anyhow::anyhow;
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::{image::Image, prelude::*};
 use mousefood::prelude::*;
 use mousefood::ratatui::widgets::{Block, Paragraph, Wrap};
 use mousefood::{fonts, EmbeddedBackend};
-use std::sync::{Arc, Mutex};
+use ssd1680::graphics::DisplayAnyIn;
 use tinybmp::Bmp;
 
 pub struct HomePageInfo {
@@ -28,19 +27,17 @@ impl Default for HomePageInfo {
     }
 }
 impl HomePageInfo {
-    pub fn build_home_page(board: Arc<Mutex<BoardPeripherals>>) -> anyhow::Result<()> {
+    pub fn build_home_page(screen: &mut Screen) -> anyhow::Result<()> {
         {
-            let mut board = board.lock().map_err(|_| anyhow!("Mutex lock error"))?;
             let config = EmbeddedBackendConfig {
                 font_regular: fonts::MONO_6X13,
                 ..Default::default()
             };
-            let backend = EmbeddedBackend::new(&mut board.bw_buf, config);
+            let backend = EmbeddedBackend::new(&mut screen.bw_buf, config);
             let mut terminal = Terminal::new(backend)?;
             terminal.draw(|f| Self::home_page(f, HomePageInfo::default()))?;
         }
-        let mut board = board.lock().map_err(|_| anyhow!("Mutex lock error"))?;
-        Self::pad_time_date(&mut board)?;
+        Self::pad_time_date(&mut screen.bw_buf)?;
         Ok(())
     }
 
@@ -86,7 +83,7 @@ impl HomePageInfo {
     }
 
     /// 由于需要显示很大的时间但是 mousefood 不能单独设置字体, 这里只能在外部根据坐标填充时间
-    pub(crate) fn pad_time_date(board: &mut BoardPeripherals) -> anyhow::Result<()> {
+    pub(crate) fn pad_time_date(buf: &mut DisplayAnyIn) -> anyhow::Result<()> {
         let time_str = chrono::Local::now().format("%H:%M").to_string();
         let mut current_x = 25; // 这里的初始值决定了整体左右偏移
         let y_position = 35; // 这里的初始值决定了上下偏移
@@ -101,7 +98,7 @@ impl HomePageInfo {
             if let Ok(data) = std::fs::read(&path) {
                 if let Ok(bmp) = Bmp::<BinaryColor>::from_slice(&data) {
                     let img = Image::new(&bmp, Point::new(current_x, y_position));
-                    img.draw(&mut board.bw_buf).unwrap();
+                    img.draw(buf).unwrap();
                     current_x += (bmp.size().width + 4) as i32;
                 }
             }

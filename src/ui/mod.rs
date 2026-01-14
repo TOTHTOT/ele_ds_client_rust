@@ -1,4 +1,4 @@
-use crate::board::peripheral::BoardPeripherals;
+use crate::board::peripheral::{ActivePage, Screen};
 use crate::ui::home_page::HomePageInfo;
 use crate::ui::sensor_page::SensorPage;
 use anyhow::anyhow;
@@ -16,25 +16,40 @@ pub struct UiInfo {
     sensor: SensorPage,
 }
 
-pub fn mouse_food_test(board: &mut Arc<Mutex<BoardPeripherals>>) -> anyhow::Result<()> {
-    let pages = vec![
-        HomePageInfo::build_home_page, /*, SensorPage::build_sensor_page*/
-    ];
-    for page in pages {
-        page(board.clone())?;
-        let mut board = board.lock().map_err(|_| anyhow!("Mutex lock error"))?;
-        // 单独解构这些, 避免借用问题
-        let BoardPeripherals {
-            ref mut ssd1680,
-            ref mut bw_buf,
-            ref mut delay,
-            ..
-        } = &mut *board;
-        let buffer_data = bw_buf.buffer();
-        ssd1680.update_bw_frame(buffer_data).unwrap();
-        ssd1680.display_frame(delay).unwrap();
-        std::thread::sleep(std::time::Duration::from_secs(5));
+/// 用于包裹 ssd1680返回的错误
+macro_rules! hw_try {
+    ($e:expr, $msg:expr) => {
+        $e.map_err(|e| anyhow::anyhow!("{}: {:?}", $msg, e))?
+    };
+}
+
+pub fn mouse_food_test(
+    screen: Arc<Mutex<Screen>>,
+    set_active_page: ActivePage,
+) -> anyhow::Result<()> {
+    let pages = [HomePageInfo::build_home_page, SensorPage::build_sensor_page];
+    let mut screen = screen.lock().map_err(|_| anyhow!("Mutex lock error"))?;
+    if set_active_page == screen.current_page {
+        return Ok(());
     }
+    screen.current_page = set_active_page;
+    let page = pages
+        .get(screen.current_page as usize)
+        .ok_or(anyhow!("Page not found"))?;
+    page(&mut screen)?;
+    // 单独解构这些, 避免借用问题
+    let Screen {
+        ref mut ssd1680,
+        ref mut delay,
+        ref mut bw_buf,
+        ..
+    } = &mut *screen;
+
+    hw_try!(ssd1680.init(delay), "Ssd1680 init");
+    hw_try!(ssd1680.update_bw_frame(bw_buf.buffer()), "Ssd1680 update");
+    hw_try!(ssd1680.display_frame(delay), "Ssd1680 display");
+    hw_try!(ssd1680.entry_sleep(), "Ssd1680 sleep");
+    drop(screen);
     Ok(())
 }
 

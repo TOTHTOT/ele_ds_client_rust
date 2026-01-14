@@ -1,4 +1,4 @@
-use crate::board::button::DeviceButton;
+use crate::board::button::{DeviceButton, PressedKeyInfo};
 use crate::board::es8388::driver::{Es8388, RunMode};
 use crate::board::power_manage::DeviceBattery;
 use crate::board::share_i2c_bus::SharedI2cDevice;
@@ -46,13 +46,83 @@ type Es8388Type = Es8388<
 pub struct DeviceStatus {
     sht3x_measure: Measurement,
 }
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[repr(usize)]
+pub enum ActivePage {
+    #[default]
+    Home = 0,
+    Sensor = 1,
+    Image = 2,
+}
+impl TryFrom<usize> for ActivePage {
+    type Error = anyhow::Error;
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(ActivePage::Home),
+            1 => Ok(ActivePage::Sensor),
+            2 => Ok(ActivePage::Image),
+            _ => Err(anyhow::anyhow!("Invalid ActivePage value: {}", value)),
+        }
+    }
+}
+
+// 屏幕对象
+pub struct Screen {
+    pub ssd1680: Ssd1680DisplayType,
+    pub bw_buf: DisplayAnyIn,
+    pub current_page: ActivePage,
+    pub delay: Ets,
+}
+
+impl Screen {
+    pub fn new(
+        spi: SpiDeviceDriver<'static, SpiDriver<'static>>,
+        busy: PinDriver<'static, AnyIOPin, Input>,
+        dc: PinDriver<'static, AnyIOPin, Output>,
+        rst: PinDriver<'static, AnyIOPin, Output>,
+        mut width: u16,
+        mut height: u16,
+    ) -> anyhow::Result<Self> {
+        let mut delay = Ets;
+        width = width.max(128);
+        height = height.max(296);
+        let ssd1680 = Ssd1680::new(spi, busy, dc, rst, &mut delay, width, height)
+            .map_err(|e| anyhow::anyhow!("Ssd1680 error: {e:?}"))?;
+        let mut bw_buf = DisplayAnyIn::bw(width, height);
+        bw_buf.set_rotation(DisplayRotation::Rotate270);
+
+        Ok(Self {
+            ssd1680,
+            bw_buf,
+            current_page: ActivePage::default(),
+            delay,
+        })
+    }
+    /// 测试屏幕刷新是否正常, 画圆形和方块
+    pub fn test_epd_display(&mut self) -> anyhow::Result<()> {
+        self.ssd1680.clear_bw_frame().unwrap();
+
+        self.bw_buf.set_rotation(DisplayRotation::Rotate270);
+        Rectangle::new(Point::new(0, 20), Size::new(40, 40))
+            .into_styled(PrimitiveStyle::with_fill(Black))
+            .draw(&mut self.bw_buf)
+            .unwrap();
+
+        Circle::new(Point::new(80, 80), 40)
+            .into_styled(PrimitiveStyle::with_fill(Black))
+            .draw(&mut self.bw_buf)
+            .unwrap();
+        log::info!("Send bw frame to display");
+        self.ssd1680.update_bw_frame(self.bw_buf.buffer()).unwrap();
+        self.ssd1680.display_frame(&mut self.delay).unwrap();
+        Ok(())
+    }
+}
+
 #[allow(dead_code)]
 pub struct BoardPeripherals {
     wifi: EspWifi<'static>,
     pub device_config: DeviceConfig,
-    pub bw_buf: DisplayAnyIn,
-    pub delay: Ets,
-    pub ssd1680: Ssd1680DisplayType,
     pub es8388: Arc<Mutex<Es8388Type>>,
     vout_3v3: PinDriver<'static, AnyIOPin, Output>,
     sht3x_rst: PinDriver<'static, AnyIOPin, Output>,
@@ -62,8 +132,13 @@ pub struct BoardPeripherals {
         PinDriver<'static, AnyIOPin, Input>,
         PinDriver<'static, AnyIOPin, Input>,
     >,
+
     pub device_button: DeviceButton,
     pub key_read_exit: Arc<AtomicBool>, // 发送信号让读按键线程退出
+    pub key_rx: Option<std::sync::mpsc::Receiver<PressedKeyInfo>>,
+
+    pub screen: Arc<Mutex<Screen>>, // 屏幕对象需要被多个线程处理, 比如修改页面, 刷新页面
+    pub screen_exit: Arc<AtomicBool>, // 发送信号让线程退出
 }
 
 #[allow(dead_code)]
@@ -110,7 +185,7 @@ impl BoardPeripherals {
         sht3x.repeatability = Repeatability::High;
 
         // 按键初始化
-        let (key_tx, _ket_rx) = std::sync::mpsc::channel();
+        let (key_tx, key_rx) = std::sync::mpsc::channel();
         let key_pins: Vec<AnyInputPin> = vec![
             peripherals.pins.gpio3.into(),
             peripherals.pins.gpio46.into(),
@@ -127,7 +202,6 @@ impl BoardPeripherals {
         let dc = PinDriver::output(peripherals.pins.gpio7.downgrade())?;
         let cs = peripherals.pins.gpio15;
         let busy = PinDriver::input(peripherals.pins.gpio16.downgrade())?;
-
         let spi = SpiDriver::new(
             spi,
             sclk,
@@ -136,11 +210,8 @@ impl BoardPeripherals {
             &SpiDriverConfig::default(),
         )?;
         let spi = SpiDeviceDriver::new(spi, Some(cs), &spi::config::Config::new())?;
-
-        let mut delay = Ets;
-        let ssd1680 = Ssd1680::new(spi, busy, dc, rst, &mut delay, 128, 296).unwrap();
-        let mut display_bw = DisplayAnyIn::bw(128, 296);
-        display_bw.set_rotation(DisplayRotation::Rotate270);
+        let screen_exit = Arc::new(AtomicBool::new(false));
+        let screen = Arc::new(Mutex::new(Screen::new(spi, busy, dc, rst, 128, 296)?));
 
         let i2s = peripherals.i2s0;
         // i2s相关初始化
@@ -169,38 +240,40 @@ impl BoardPeripherals {
         let regs = es8388.read_all()?;
         log::info!("es8388 regs: {:?}", &regs);
         let es8388 = Arc::new(Mutex::new(es8388));
-        let es8388_clone = es8388.clone();
-        std::thread::spawn(move || loop {
-            let mut es8388 = es8388_clone.lock().unwrap();
-            let buf = Box::new([100_u8; 1024]);
-            // if let Err(e) = es8388.read_audio(&mut *buf, 1000) {
-            //     log::error!("Failed to read audio buffer: {e:?}");
-            // }
-            // log::info!("es8388 = {buf:?}");
-            if let Err(e) = es8388.write_audio(&*buf, 1000) {
-                log::error!("Failed to write audio buffer: {e:?}");
-            }
-            log::info!("es8388: {:?}", &buf);
-            std::thread::sleep(std::time::Duration::from_millis(5000));
-        });
-        let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
-        if let Err(e) = Self::wifi_connect(&mut wifi, &device_config) {
-            log::warn!("Wifi connect error: {e:?}");
-        }
+        // let es8388_clone = es8388.clone();
+        // std::thread::spawn(move || loop {
+        //     let mut es8388 = es8388_clone.lock().unwrap();
+        //     let buf = Box::new([100_u8; 1024]);
+        //     // if let Err(e) = es8388.read_audio(&mut *buf, 1000) {
+        //     //     log::error!("Failed to read audio buffer: {e:?}");
+        //     // }
+        //     // log::info!("es8388 = {buf:?}");
+        //     if let Err(e) = es8388.write_audio(&*buf, 1000) {
+        //         log::error!("Failed to write audio buffer: {e:?}");
+        //     }
+        //     log::info!("es8388: {:?}", &buf);
+        //     std::thread::sleep(std::time::Duration::from_millis(5000));
+        // });
+        let wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
+        // if let Err(e) = Self::wifi_connect(&mut wifi, &device_config) {
+        //     log::warn!("Wifi connect error: {e:?}");
+        // }
 
         Ok(BoardPeripherals {
             wifi,
             device_config,
-            bw_buf: display_bw,
-            delay,
             es8388,
-            ssd1680,
             vout_3v3,
             sht3x_rst,
             sht3x,
             device_battery,
             device_button,
+
             key_read_exit,
+            key_rx: Some(key_rx),
+
+            screen,
+            screen_exit,
         })
     }
 
@@ -283,29 +356,14 @@ impl BoardPeripherals {
         }
         anyhow::bail!("WiFi connect failed");
     }
-
-    pub fn test_epd_display(&mut self) -> anyhow::Result<()> {
-        self.ssd1680.clear_bw_frame().unwrap();
-
-        self.bw_buf.set_rotation(DisplayRotation::Rotate270);
-        Rectangle::new(Point::new(0, 20), Size::new(40, 40))
-            .into_styled(PrimitiveStyle::with_fill(Black))
-            .draw(&mut self.bw_buf)
-            .unwrap();
-
-        Circle::new(Point::new(80, 80), 40)
-            .into_styled(PrimitiveStyle::with_fill(Black))
-            .draw(&mut self.bw_buf)
-            .unwrap();
-        log::info!("Send bw frame to display");
-        self.ssd1680.update_bw_frame(self.bw_buf.buffer()).unwrap();
-        self.ssd1680.display_frame(&mut self.delay).unwrap();
-        Ok(())
-    }
 }
 
 impl Drop for BoardPeripherals {
     fn drop(&mut self) {
+        self.screen_exit
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        self.key_read_exit
+            .store(true, std::sync::atomic::Ordering::Relaxed);
         log::warn!("Dropping BoardPeripherals, close power");
         self.vout_3v3.set_low().unwrap();
     }
