@@ -36,7 +36,7 @@ impl TryFrom<usize> for ActivePage {
             0 => Ok(ActivePage::Sensor),
             1 => Ok(ActivePage::Home),
             2 => Ok(ActivePage::Image),
-            _ => Err(anyhow::anyhow!("Invalid ActivePage value: {}", value)),
+            _ => Err(anyhow::anyhow!("Invalid ActivePage value: {value}")),
         }
     }
 }

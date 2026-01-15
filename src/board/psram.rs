@@ -10,10 +10,7 @@ pub fn check_psram() {
         let total_psram = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
 
         log::info!(
-            "Memory Stats: DRAM Free: {} bytes | PSRAM: {} / {} bytes free",
-            free_internal,
-            free_psram,
-            total_psram
+            "Memory Stats: DRAM Free: {free_internal} bytes | PSRAM: {free_psram} / {total_psram} bytes free"
         );
     }
 }

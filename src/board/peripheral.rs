@@ -111,7 +111,7 @@ impl Screen {
 
 #[allow(dead_code)]
 pub struct BoardPeripherals {
-    wifi: EspWifi<'static>,
+    pub wifi: EspWifi<'static>,
     pub device_config: DeviceConfig,
     pub es8388: Arc<Mutex<Es8388Type>>,
     vout_3v3: PinDriver<'static, AnyIOPin, Output>,
@@ -251,10 +251,7 @@ impl BoardPeripherals {
         //     log::info!("es8388: {:?}", &buf);
         //     std::thread::sleep(std::time::Duration::from_millis(5000));
         // });
-        let mut wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
-        if let Err(e) = Self::wifi_connect(&mut wifi, &device_config) {
-            log::warn!("Wifi connect error: {e:?}");
-        }
+        let wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
 
         Ok(BoardPeripherals {
             wifi,
@@ -300,27 +297,17 @@ impl BoardPeripherals {
         log::info!("device config: {device_config:?}");
         Ok(device_config)
     }
-    pub fn wifi_connect(wifi: &mut EspWifi, config: &DeviceConfig) -> anyhow::Result<()> {
-        if !config.is_need_connect_wifi() && !DeviceConfig::current_time_is_too_old() {
-            log::info!(
-                "Wifi config is not need connect, boot_times: {}",
-                config.boot_times
-            );
-            return Ok(());
-        }
-        let ssid_str = config
-            .wifi_ssid
-            .as_deref()
-            .ok_or_else(|| anyhow::anyhow!("get wifi name failed"))?;
-        let ssid = heapless::String::<32>::from_str(ssid_str)
-            .map_err(|_| anyhow::anyhow!("ssid too long:{ssid_str}"))?;
+    pub fn wifi_connect(
+        wifi: &mut EspWifi,
+        ssid: &str,
+        passwd: &str,
+        timeout: u8,
+    ) -> anyhow::Result<()> {
+        let ssid = heapless::String::<32>::from_str(ssid)
+            .map_err(|_| anyhow::anyhow!("ssid too long:{ssid}"))?;
 
-        let password_str = config
-            .wifi_password
-            .as_deref()
-            .ok_or_else(|| anyhow::anyhow!("get wifi name failed"))?;
-        let password = heapless::String::<64>::from_str(password_str)
-            .map_err(|_| anyhow::anyhow!("passwd too long:{password_str}"))?;
+        let password = heapless::String::<64>::from_str(passwd)
+            .map_err(|_| anyhow::anyhow!("passwd too long:{passwd}"))?;
 
         let wifi_cfg = wifi::Configuration::Client(wifi::ClientConfiguration {
             ssid,
@@ -332,19 +319,12 @@ impl BoardPeripherals {
         wifi.start()?;
         wifi.connect()?;
 
-        for i in 1..=config.wifi_max_link_time {
+        for i in 1..=timeout {
             std::thread::sleep(std::time::Duration::from_secs(1));
             if wifi.is_connected()? {
                 let netif = wifi.sta_netif();
                 if let Ok(ip_info) = netif.get_ip_info() {
                     if !ip_info.ip.is_unspecified() {
-                        // 连接成功获取网络时间
-                        if let Err(e) = get_clock_ntp::set_ntp_time(
-                            config.wifi_max_link_time - i,
-                            config.time_zone.as_str(),
-                        ) {
-                            log::warn!("failed to set NTP time: {e:?}");
-                        }
                         log::info!("WiFi connected IP: {:?}, total used time: {i}", ip_info.ip);
                         return Ok(());
                     }

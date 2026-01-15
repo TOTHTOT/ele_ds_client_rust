@@ -172,7 +172,7 @@ impl EleDsHttpClient {
         loop {
             let n = response
                 .read(&mut buf)
-                .map_err(|e| anyhow::anyhow!("Read error: {:?}", e))?;
+                .map_err(|e| anyhow::anyhow!("Read error: {e:?}"))?;
             if n == 0 {
                 break;
             }

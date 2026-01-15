@@ -39,8 +39,8 @@ impl Default for UserInfo {
 pub struct DeviceConfig {
     user_info: UserInfo,
     device_info: DeviceInfo,
-    pub wifi_ssid: Option<String>,
-    pub wifi_password: Option<String>,
+    pub wifi_ssid: String,
+    pub wifi_password: String,
     pub requery_upgrade_time_minutes: u32, // 查询更新版本间隔, 单位: 分钟
     pub wifi_max_link_time: u8,            // wifi最大连接时间, 秒
     pub time_zone: String,                 // 时区
@@ -56,8 +56,8 @@ impl Default for DeviceConfig {
         Self {
             user_info: UserInfo::default(),
             device_info: DeviceInfo::default(),
-            wifi_ssid: Some("esp-2.4G".to_string()),
-            wifi_password: Some("12345678..".to_string()),
+            wifi_ssid: "esp-2.4G".to_string(),
+            wifi_password: "12345678..".to_string(),
             requery_upgrade_time_minutes: 1440,
             wifi_max_link_time: 30,
             time_zone: "CST-8".to_string(),
@@ -126,7 +126,7 @@ impl DeviceConfig {
 
     pub fn is_need_connect_wifi(&self) -> bool {
         // 没设置间隔时间就每次都连接
-        if self.wifi_connect_interval == 0 {
+        if self.wifi_connect_interval == 0 || Self::current_time_is_too_old() {
             return true;
         }
         self.boot_times % self.wifi_connect_interval == 0

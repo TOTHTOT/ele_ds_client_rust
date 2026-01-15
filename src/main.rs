@@ -1,7 +1,8 @@
 use ele_ds_client_rust::board::button::KeyClickedType;
 use ele_ds_client_rust::board::power_manage::next_minute_left_time;
-use ele_ds_client_rust::board::psram;
+use ele_ds_client_rust::board::{get_clock_ntp, psram};
 use ele_ds_client_rust::communication::http_server::HttpServer;
+use ele_ds_client_rust::communication::weather::Weather;
 use ele_ds_client_rust::ui::mouse_food_test;
 use ele_ds_client_rust::{
     board::peripheral::BoardPeripherals,
@@ -69,7 +70,9 @@ fn main() -> anyhow::Result<()> {
             log::info!("{key_info:?}");
         }
     });
-
+    if let Err(e) = connect_net(&mut board) {
+        log::warn!("connect_net failed: {e:?}");
+    }
     let board = Arc::new(Mutex::new(board));
 
     let _http_server = HttpServer::new()?;
@@ -108,6 +111,39 @@ fn main() -> anyhow::Result<()> {
         std::thread::sleep(std::time::Duration::from_micros(sleep_time));
         // ele_ds_client_rust::board::power_manage::enter_deep_sleep_mode_per_minute();
     }
+}
+
+/// 连接网络
+fn connect_net(board: &mut BoardPeripherals) -> anyhow::Result<()> {
+    if !board.device_config.is_need_connect_wifi() {
+        return Ok(());
+    }
+    if BoardPeripherals::wifi_connect(
+        &mut board.wifi,
+        &board.device_config.wifi_ssid,
+        &board.device_config.wifi_password,
+        board.device_config.wifi_max_link_time,
+    )
+    .is_ok()
+    {
+        if let Err(e) = after_wifi_established() {
+            log::warn!("after_wifi_established failed: {e:?}");
+        }
+        if let Err(e) = get_clock_ntp::set_ntp_time(
+            board.device_config.wifi_max_link_time,
+            board.device_config.time_zone.as_str(),
+        ) {
+            log::warn!("failed to set NTP time: {e:?}");
+        }
+        let weather = Weather::new("fuzhou", "e7d95a70480a4d6c9140378d9d100d42");
+        if let Ok(weather) = weather.get_weather_hefeng() {
+            log::info!("weather: \n{weather:?}");
+        } else {
+            log::warn!("get_weather_hefeng failed()");
+        }
+        // Ok(())
+    }
+    Ok(())
 }
 
 /// wifi 连接成功要做的一些内容
