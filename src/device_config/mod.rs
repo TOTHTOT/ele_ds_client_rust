@@ -47,7 +47,8 @@ pub struct DeviceConfig {
     pub city_name: String,                 // 所在城市地点, 获取天气
     pub wifi_connect_interval: u32,        // WiFi 连接的电源周期间隔, 和 boot_times 一起用
     pub boot_times: u32,                   // 重启次数
-    pub current_page: ActivePage,
+    pub current_page: ActivePage,          // 当前活动的页面, 掉电前同步
+    pub weather_api_key: String,           // 获取天气数据api的key
 }
 
 impl Default for DeviceConfig {
@@ -64,6 +65,7 @@ impl Default for DeviceConfig {
             wifi_connect_interval: 60,
             boot_times: 0,
             current_page: ActivePage::default(),
+            weather_api_key: "e7d95a70480a4d6c9140378d9d100d42".to_string(),
         }
     }
 }

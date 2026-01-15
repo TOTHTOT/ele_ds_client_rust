@@ -105,8 +105,8 @@ fn main() -> anyhow::Result<()> {
 
         loop_times += 1;
         psram::check_psram();
-        // std::thread::sleep(std::time::Duration::from_micros(sleep_time));
-        ele_ds_client_rust::board::power_manage::enter_deep_sleep_mode_per_minute();
+        std::thread::sleep(std::time::Duration::from_micros(sleep_time));
+        // ele_ds_client_rust::board::power_manage::enter_deep_sleep_mode_per_minute();
     }
 }
 

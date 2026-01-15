@@ -4,6 +4,8 @@ use crate::communication::http_client::communication::{
 use embedded_svc::http::client::Response;
 use embedded_svc::{http::client::Client, io::Write, utils::io};
 use esp_idf_svc::http::client::{Configuration, EspHttpConnection};
+use flate2::read::GzDecoder;
+use std::io::Read;
 use std::ops::Add;
 
 // 和服务器通信的基本数据包
@@ -73,7 +75,6 @@ impl EleDsHttpClient {
             use_global_ca_store: false,
             crt_bundle_attach: None,
 
-            // 如果是 HTTPS，缓冲区必须调大，建议收 10KB，发 4KB
             buffer_size: if is_https { Some(10240) } else { Some(4096) },
             buffer_size_tx: if is_https { Some(4096) } else { Some(2048) },
 
@@ -153,5 +154,41 @@ impl EleDsHttpClient {
         handle(response)?;
         log::info!("handle response success");
         Ok(())
+    }
+
+    /// 发送一个GET 请求
+    pub fn get_msg(&mut self, full_url: &str) -> anyhow::Result<String> {
+        let request = self.client.get(full_url)?;
+
+        let mut response = request.submit()?;
+
+        let status = response.status();
+        if status != 200 {
+            anyhow::bail!("GET request failed with status: {status}");
+        }
+
+        let mut recv_vec = Vec::new();
+        let mut buf = [0u8; 512];
+        loop {
+            let n = response
+                .read(&mut buf)
+                .map_err(|e| anyhow::anyhow!("Read error: {:?}", e))?;
+            if n == 0 {
+                break;
+            }
+            recv_vec.extend_from_slice(&buf[..n]);
+        }
+        // 如果收到的一包数据前两个字节是 1f 8b 说明数据包使用了 gzip压缩
+        if recv_vec.len() > 2 && recv_vec[0] == 0x1f && recv_vec[1] == 0x8b {
+            let mut decoder = GzDecoder::new(&recv_vec[..]);
+            let mut decompressed_string = String::new();
+            decoder
+                .read_to_string(&mut decompressed_string)
+                .map_err(|e| anyhow::anyhow!("Gzip filed: {e:?}"))?;
+            Ok(decompressed_string)
+        } else {
+            let body_string = String::from_utf8(recv_vec)?;
+            Ok(body_string)
+        }
     }
 }

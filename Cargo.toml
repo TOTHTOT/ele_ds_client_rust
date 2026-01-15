@@ -48,6 +48,7 @@ embedded-sht3x = "0.1.0"
 embedded-hal = "1.0.0"
 enumset = "1.1.10"
 button-driver = { version = "0.2.5", features = ["std", "embedded_hal"] }
+flate2 = { version = "1.1.8", features = ["miniz_oxide"] }
 
 # b) With embassy-executor:
 # embassy-executor = { version = "0.7", features = ["executor-thread", "arch-std"] }

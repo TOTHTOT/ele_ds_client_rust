@@ -22,6 +22,7 @@ pub struct PressedKeyInfo {
 #[derive(Debug)]
 pub struct DeviceButton {
     pub read_thread_handle: Option<JoinHandle<()>>, // 按键线程, 需要被回收
+    exit: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl DeviceButton {
@@ -44,14 +45,16 @@ impl DeviceButton {
             keys.push(btn);
         }
 
+        let exit_clone = exit.clone();
         let handle = std::thread::spawn(move || {
-            if let Err(e) = Self::key_run(keys, tx, exit) {
+            if let Err(e) = Self::key_run(keys, tx, exit_clone) {
                 log::error!("key run failed: {e:?}");
             }
         });
 
         Ok(DeviceButton {
             read_thread_handle: Some(handle),
+            exit,
         })
     }
 
@@ -89,6 +92,7 @@ impl DeviceButton {
 impl Drop for DeviceButton {
     fn drop(&mut self) {
         if let Some(handle) = self.read_thread_handle.take() {
+            self.exit.store(true, std::sync::atomic::Ordering::Relaxed);
             log::info!("Waiting for key thread to join...");
             let _ = handle.join();
         }

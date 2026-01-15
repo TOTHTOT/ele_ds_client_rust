@@ -10,6 +10,7 @@
       <w>mclk</w>
       <w>mousefood</w>
       <w>netif</w>
+      <w>precip</w>
       <w>psram</w>
       <w>sclk</w>
       <w>sysloop</w>
