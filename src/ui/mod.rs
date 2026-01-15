@@ -1,12 +1,14 @@
 use crate::board::peripheral::{AllSensorData, Screen};
+use crate::communication::weather::Weather;
 use crate::ui::home_page::HomePageInfo;
 use crate::ui::sensor_page::SensorPage;
 use crate::ActivePage;
 use anyhow::anyhow;
+use chrono::Timelike;
 use mousefood::prelude::{Frame, Rect, Style, Stylize};
 use mousefood::ratatui::widgets::Block;
 use ssd1680::prelude::Display;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 pub mod home_page;
 pub mod sensor_page;
@@ -33,12 +35,8 @@ pub fn mouse_food_test(
     }
     let home = HomePageInfo {
         net_state: false,
-        weather_info: [
-            "Sunny 25℃".to_string(),
-            "Sunny 25℃".to_string(),
-            "Sunny 25℃".to_string(),
-        ],
-        battery: 100,
+        weather_info: get_weather_per_hour(&mut screen)?,
+        battery: 10,
         city: "Fuzhou".to_string(),
     };
     let sensor = SensorPage {
@@ -68,6 +66,31 @@ pub fn mouse_food_test(
     hw_try!(ssd1680.entry_sleep(), "Ssd1680 sleep");
     drop(screen);
     Ok(())
+}
+
+/// 每小时更新一次时间, 默认都返回 default_data , 除非 get_ui_need_data()失败
+fn get_weather_per_hour(screen: &mut MutexGuard<Screen>) -> anyhow::Result<[String; 3]> {
+    let now = chrono::Local::now().hour();
+    let default_data = [
+        "Sunny 25℃".to_string(),
+        "Sunny 25℃".to_string(),
+        "Sunny 25℃".to_string(),
+    ];
+    if now != screen.last_hour {
+        if let Ok(weather) = Weather::new(
+            &screen.device_config.as_ref().city_name,
+            &screen.device_config.as_ref().weather_api_key,
+        )
+        .get_weather_hefeng()
+        {
+            screen.last_hour = now;
+            Ok(weather.get_ui_need_data()?)
+        } else {
+            Ok(default_data)
+        }
+    } else {
+        Ok(default_data)
+    }
 }
 
 pub(super) fn general_block(f: &mut Frame, info: &HomePageInfo) -> Rect {

@@ -1,4 +1,5 @@
 use crate::communication::http_client::EleDsHttpClient;
+use chrono::Timelike;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -11,7 +12,34 @@ pub struct WeatherResponse {
     pub daily: Vec<DailyWeather>,
     pub refer: Refer,
 }
+impl WeatherResponse {
+    pub fn get_ui_need_data(&self) -> anyhow::Result<[String; 3]> {
+        let mut data = Vec::new();
+        for i in 0..3 {
+            let day_weather = self
+                .daily
+                .get(i)
+                .ok_or_else(|| anyhow::anyhow!("Get daily failed, index: {i}"))?;
+            let text = {
+                let hour = chrono::Local::now().hour();
+                if !(7..=18).contains(&hour) {
+                    &day_weather.text_night
+                } else {
+                    &day_weather.text_day
+                }
+            };
+            data.push(format!(
+                "{} {}~{}℃",
+                text, day_weather.temp_min, day_weather.temp_max
+            ));
+        }
 
+        let result: [String; 3] = data
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("Failed to convert to array"))?;
+        Ok(result)
+    }
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 /// 每日天气

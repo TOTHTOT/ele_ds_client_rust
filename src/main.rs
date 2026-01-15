@@ -2,7 +2,6 @@ use ele_ds_client_rust::board::button::KeyClickedType;
 use ele_ds_client_rust::board::power_manage::next_minute_left_time;
 use ele_ds_client_rust::board::{get_clock_ntp, psram};
 use ele_ds_client_rust::communication::http_server::HttpServer;
-use ele_ds_client_rust::communication::weather::Weather;
 use ele_ds_client_rust::ui::mouse_food_test;
 use ele_ds_client_rust::{
     board::peripheral::BoardPeripherals,
@@ -19,14 +18,15 @@ fn main() -> anyhow::Result<()> {
     esp_idf_svc::log::EspLogger::initialize_default();
     log::info!("system start, build info: {} 12", env!("BUILD_TIME"));
     let mut board = BoardPeripherals::new()?;
-    board.device_config.boot_times_add()?;
+    let screen = board.screen.take().expect("no screen");
+    let screen_main = screen.clone();
     {
         let sensor_data = board.read_all_sensor()?;
-        let mut screen = board.screen.lock().map_err(|e| anyhow::anyhow!("{e:?}"))?;
-        screen.last_sensor_status = Some(sensor_data);
+        screen
+            .lock()
+            .expect("lock screen failed")
+            .last_sensor_status = Some(sensor_data);
     }
-    let screen = board.screen.clone();
-    let screen_main = board.screen.clone();
     let screen_exit = board.screen_exit.clone();
     let key_exit = board.key_read_exit.clone();
 
@@ -99,10 +99,10 @@ fn main() -> anyhow::Result<()> {
             // 如果当前是主页面或者传感器页面就定时刷新数据, 不然的话就睡眠最大时间
             sleep_time = next_minute_left_time();
         }
-        if board.device_config.current_page != screen.current_page {
-            board.device_config.current_page = screen.current_page;
-            board.device_config.save_config()?;
-        }
+        // if board.device_config.current_page != screen.current_page {
+        //     board.device_config.current_page = screen.current_page;
+        //     board.device_config.save_config()?;
+        // }
         drop(screen);
         drop(board);
 
@@ -130,18 +130,11 @@ fn connect_net(board: &mut BoardPeripherals) -> anyhow::Result<()> {
             log::warn!("after_wifi_established failed: {e:?}");
         }
         if let Err(e) = get_clock_ntp::set_ntp_time(
-            board.device_config.wifi_max_link_time,
+            board.device_config.wifi_max_link_time / 2,
             board.device_config.time_zone.as_str(),
         ) {
             log::warn!("failed to set NTP time: {e:?}");
         }
-        let weather = Weather::new("fuzhou", "e7d95a70480a4d6c9140378d9d100d42");
-        if let Ok(weather) = weather.get_weather_hefeng() {
-            log::info!("weather: \n{weather:?}");
-        } else {
-            log::warn!("get_weather_hefeng failed()");
-        }
-        // Ok(())
     }
     Ok(())
 }

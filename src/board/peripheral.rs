@@ -54,6 +54,8 @@ pub struct Screen {
     pub current_page: ActivePage,
     pub delay: Ets,
     pub last_sensor_status: Option<AllSensorData>,
+    pub last_hour: u32,
+    pub device_config: Arc<DeviceConfig>,
 }
 
 impl Screen {
@@ -65,6 +67,7 @@ impl Screen {
         mut width: u16,
         mut height: u16,
         current_page: ActivePage,
+        device_config: Arc<DeviceConfig>,
     ) -> anyhow::Result<Self> {
         let mut delay = Ets;
         width = width.max(128);
@@ -80,6 +83,8 @@ impl Screen {
             current_page,
             delay,
             last_sensor_status: None,
+            last_hour: 0,
+            device_config,
         })
     }
     /// 测试屏幕刷新是否正常, 画圆形和方块
@@ -112,7 +117,7 @@ impl Screen {
 #[allow(dead_code)]
 pub struct BoardPeripherals {
     pub wifi: EspWifi<'static>,
-    pub device_config: DeviceConfig,
+    pub device_config: Arc<DeviceConfig>,
     pub es8388: Arc<Mutex<Es8388Type>>,
     vout_3v3: PinDriver<'static, AnyIOPin, Output>,
     sht3x_rst: PinDriver<'static, AnyIOPin, Output>,
@@ -127,8 +132,8 @@ pub struct BoardPeripherals {
     pub key_read_exit: Arc<AtomicBool>, // 发送信号让读按键线程退出
     pub key_rx: Option<std::sync::mpsc::Receiver<PressedKeyInfo>>,
 
-    pub screen: Arc<Mutex<Screen>>, // 屏幕对象需要被多个线程处理, 比如修改页面, 刷新页面
-    pub screen_exit: Arc<AtomicBool>, // 发送信号让线程退出
+    pub screen: Option<Arc<Mutex<Screen>>>, // 屏幕对象需要被多个线程处理, 比如修改页面, 刷新页面
+    pub screen_exit: Arc<AtomicBool>,       // 发送信号让线程退出
 }
 
 #[allow(dead_code)]
@@ -138,8 +143,10 @@ impl BoardPeripherals {
         let sysloop = EspSystemEventLoop::take()?;
         let nvs = EspNvsPartition::<NvsDefault>::take()?;
 
-        let device_config = BoardPeripherals::init_filesystem_load_config()?;
+        let mut device_config = BoardPeripherals::init_filesystem_load_config()?;
         get_clock_ntp::set_time_zone(device_config.time_zone.as_str())?;
+        device_config.boot_times_add()?;
+        let device_config = Arc::new(device_config);
 
         // 基本io口初始化
         let mut vout_3v3 = PinDriver::output(peripherals.pins.gpio10.downgrade())?;
@@ -208,6 +215,7 @@ impl BoardPeripherals {
             128,
             296,
             device_config.current_page,
+            device_config.clone(),
         )?));
 
         let i2s = peripherals.i2s0;
@@ -266,7 +274,7 @@ impl BoardPeripherals {
             key_read_exit,
             key_rx: Some(key_rx),
 
-            screen,
+            screen: Some(screen),
             screen_exit,
         })
     }
