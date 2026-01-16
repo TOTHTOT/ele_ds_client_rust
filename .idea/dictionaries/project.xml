@@ -13,6 +13,7 @@
       <w>precip</w>
       <w>psram</w>
       <w>sclk</w>
+      <w>sntp</w>
       <w>sysloop</w>
       <w>vbat</w>
       <w>vmid</w>
