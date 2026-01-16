@@ -12,6 +12,7 @@ pub mod ui;
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(usize)]
 pub enum ActivePage {
+    None,
     Sensor,
     #[default]
     Home,

@@ -1,8 +1,8 @@
 use crate::board::button::{DeviceButton, PressedKeyInfo};
+use crate::board::es8388;
 use crate::board::es8388::driver::{Es8388, RunMode};
 use crate::board::power_manage::DeviceBattery;
 use crate::board::share_i2c_bus::SharedI2cDevice;
-use crate::board::{es8388, get_clock_ntp};
 use crate::device_config::DeviceConfig;
 use crate::file_system::nvs_flash_filesystem_init;
 use crate::ActivePage;
@@ -55,7 +55,6 @@ pub struct Screen {
     pub delay: Ets,
     pub last_sensor_status: Option<AllSensorData>,
     pub last_hour: u32,
-    pub device_config: Arc<DeviceConfig>,
 }
 
 impl Screen {
@@ -66,8 +65,6 @@ impl Screen {
         rst: PinDriver<'static, AnyIOPin, Output>,
         mut width: u16,
         mut height: u16,
-        current_page: ActivePage,
-        device_config: Arc<DeviceConfig>,
     ) -> anyhow::Result<Self> {
         let mut delay = Ets;
         width = width.max(128);
@@ -80,11 +77,10 @@ impl Screen {
         Ok(Self {
             ssd1680,
             bw_buf,
-            current_page,
+            current_page: ActivePage::None,
             delay,
             last_sensor_status: None,
             last_hour: 0,
-            device_config,
         })
     }
     /// 测试屏幕刷新是否正常, 画圆形和方块
@@ -117,7 +113,6 @@ impl Screen {
 #[allow(dead_code)]
 pub struct BoardPeripherals {
     pub wifi: EspWifi<'static>,
-    pub device_config: Arc<DeviceConfig>,
     pub es8388: Arc<Mutex<Es8388Type>>,
     vout_3v3: PinDriver<'static, AnyIOPin, Output>,
     sht3x_rst: PinDriver<'static, AnyIOPin, Output>,
@@ -142,11 +137,6 @@ impl BoardPeripherals {
         let peripherals = Peripherals::take()?;
         let sysloop = EspSystemEventLoop::take()?;
         let nvs = EspNvsPartition::<NvsDefault>::take()?;
-
-        let mut device_config = BoardPeripherals::init_filesystem_load_config()?;
-        get_clock_ntp::set_time_zone(device_config.time_zone.as_str())?;
-        device_config.boot_times_add()?;
-        let device_config = Arc::new(device_config);
 
         // 基本io口初始化
         let mut vout_3v3 = PinDriver::output(peripherals.pins.gpio10.downgrade())?;
@@ -207,16 +197,7 @@ impl BoardPeripherals {
         )?;
         let spi = SpiDeviceDriver::new(spi, Some(cs), &spi::config::Config::new())?;
         let screen_exit = Arc::new(AtomicBool::new(false));
-        let screen = Arc::new(Mutex::new(Screen::new(
-            spi,
-            busy,
-            dc,
-            rst,
-            128,
-            296,
-            device_config.current_page,
-            device_config.clone(),
-        )?));
+        let screen = Arc::new(Mutex::new(Screen::new(spi, busy, dc, rst, 128, 296)?));
 
         let i2s = peripherals.i2s0;
         // i2s相关初始化
@@ -263,7 +244,6 @@ impl BoardPeripherals {
 
         Ok(BoardPeripherals {
             wifi,
-            device_config,
             es8388,
             vout_3v3,
             sht3x_rst,
@@ -299,7 +279,7 @@ impl BoardPeripherals {
         log::info!("Scan complete.");
     }
 
-    fn init_filesystem_load_config() -> anyhow::Result<DeviceConfig> {
+    pub fn init_filesystem_load_config() -> anyhow::Result<DeviceConfig> {
         nvs_flash_filesystem_init()?;
         let device_config = DeviceConfig::load_config()?;
         log::info!("device config: {device_config:?}");

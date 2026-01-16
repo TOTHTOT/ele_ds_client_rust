@@ -1,7 +1,10 @@
+use chrono::Timelike;
 use ele_ds_client_rust::board::button::KeyClickedType;
 use ele_ds_client_rust::board::power_manage::next_minute_left_time;
 use ele_ds_client_rust::board::{get_clock_ntp, psram};
 use ele_ds_client_rust::communication::http_server::HttpServer;
+use ele_ds_client_rust::communication::weather::Weather;
+use ele_ds_client_rust::device_config::DeviceConfig;
 use ele_ds_client_rust::ui::mouse_food_test;
 use ele_ds_client_rust::{
     board::peripheral::BoardPeripherals,
@@ -18,6 +21,14 @@ fn main() -> anyhow::Result<()> {
     esp_idf_svc::log::EspLogger::initialize_default();
     log::info!("system start, build info: {} 12", env!("BUILD_TIME"));
     let mut board = BoardPeripherals::new()?;
+
+    let mut device_config = BoardPeripherals::init_filesystem_load_config()?;
+    get_clock_ntp::set_time_zone(device_config.time_zone.as_str())?;
+    device_config.boot_times_add()?;
+    let power_on_ui_page = device_config.current_page;
+    let device_config = Arc::new(Mutex::new(device_config));
+    let device_config_ui = device_config.clone();
+
     let screen = board.screen.take().expect("no screen");
     let screen_main = screen.clone();
     {
@@ -33,7 +44,7 @@ fn main() -> anyhow::Result<()> {
     let (screen_tx, screen_rx) = std::sync::mpsc::channel();
     let screen_tx_main = screen_tx.clone();
     // 上电同步掉电时的页面, 避免保存的页面和实际不一样
-    screen_tx_main.send(board.device_config.current_page)?;
+    screen_tx_main.send(power_on_ui_page)?;
     // 屏幕刷新线程
     let _ = std::thread::Builder::new()
         .stack_size(1024 * 10)
@@ -45,7 +56,7 @@ fn main() -> anyhow::Result<()> {
                 };
                 let screen = screen.clone();
                 log::info!("cur_set page: {cur_set_page:?}");
-                if let Err(e) = mouse_food_test(screen, cur_set_page) {
+                if let Err(e) = mouse_food_test(screen, device_config_ui.clone(), cur_set_page) {
                     log::warn!("refresh screen failed: {e:?}");
                 };
                 std::thread::sleep(std::time::Duration::from_millis(100));
@@ -70,7 +81,7 @@ fn main() -> anyhow::Result<()> {
             log::info!("{key_info:?}");
         }
     });
-    if let Err(e) = connect_net(&mut board) {
+    if let Err(e) = connect_net(&mut board, device_config.clone()) {
         log::warn!("connect_net failed: {e:?}");
     }
     let board = Arc::new(Mutex::new(board));
@@ -99,10 +110,11 @@ fn main() -> anyhow::Result<()> {
             // 如果当前是主页面或者传感器页面就定时刷新数据, 不然的话就睡眠最大时间
             sleep_time = next_minute_left_time();
         }
-        // if board.device_config.current_page != screen.current_page {
-        //     board.device_config.current_page = screen.current_page;
-        //     board.device_config.save_config()?;
-        // }
+        {
+            if let Ok(config) = device_config.lock() {
+                config.save_config()?;
+            };
+        }
         drop(screen);
         drop(board);
 
@@ -114,26 +126,37 @@ fn main() -> anyhow::Result<()> {
 }
 
 /// 连接网络
-fn connect_net(board: &mut BoardPeripherals) -> anyhow::Result<()> {
-    if !board.device_config.is_need_connect_wifi() {
+fn connect_net(
+    board: &mut BoardPeripherals,
+    device_config: Arc<Mutex<DeviceConfig>>,
+) -> anyhow::Result<()> {
+    let Ok(mut device_config) = device_config.lock() else {
+        anyhow::bail!("lock failed");
+    };
+    if !device_config.is_need_connect_wifi() {
         return Ok(());
     }
     if BoardPeripherals::wifi_connect(
         &mut board.wifi,
-        &board.device_config.wifi_ssid,
-        &board.device_config.wifi_password,
-        board.device_config.wifi_max_link_time,
+        &device_config.wifi_ssid.clone(),
+        &device_config.wifi_password.clone(),
+        device_config.wifi_max_link_time,
     )
     .is_ok()
     {
         if let Err(e) = after_wifi_established() {
             log::warn!("after_wifi_established failed: {e:?}");
         }
-        if let Err(e) = get_clock_ntp::set_ntp_time(
-            board.device_config.wifi_max_link_time / 2,
-            board.device_config.time_zone.as_str(),
-        ) {
-            log::warn!("failed to set NTP time: {e:?}");
+        if DeviceConfig::current_time_is_too_old() {
+            if let Err(e) = get_clock_ntp::set_ntp_time(
+                device_config.wifi_max_link_time / 2,
+                device_config.time_zone.as_str(),
+            ) {
+                log::warn!("failed to set NTP time: {e:?}");
+            }
+        }
+        if let Err(e) = update_weather_per_hour(&mut device_config) {
+            log::warn!("update_weather_per_hour failed: {e:?}");
         }
     }
     Ok(())
@@ -157,4 +180,17 @@ pub fn after_wifi_established() -> anyhow::Result<()> {
         Err(e) => log::warn!("create ota failed, {e:?}"),
     }
     Ok(())
+}
+/// 每小时更新一次时间, 默认都返回 default_data , 除非 get_ui_need_data()失败
+fn update_weather_per_hour(config: &mut DeviceConfig) -> anyhow::Result<()> {
+    let now = chrono::Local::now().hour();
+    if config.last_update_weather != now {
+        config.weather = Option::from(
+            Weather::new(&config.city_name, &config.weather_api_key).get_weather_hefeng()?,
+        );
+        config.last_update_weather = now;
+        Ok(())
+    } else {
+        Ok(())
+    }
 }

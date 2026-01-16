@@ -2,7 +2,7 @@ use crate::communication::http_client::EleDsHttpClient;
 use chrono::Timelike;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 /// get 天气数据返回的内容
 pub struct WeatherResponse {
@@ -73,7 +73,7 @@ pub struct DailyWeather {
     pub uv_index: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Refer {
     pub sources: Vec<String>,
     pub license: Vec<String>,

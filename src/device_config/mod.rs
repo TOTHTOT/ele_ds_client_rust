@@ -1,5 +1,6 @@
+use crate::communication::weather::WeatherResponse;
 use crate::ActivePage;
-use chrono::Datelike;
+use chrono::{Datelike, Local};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::fs::OpenOptions;
@@ -49,6 +50,8 @@ pub struct DeviceConfig {
     pub boot_times: u32,                   // 重启次数
     pub current_page: ActivePage,          // 当前活动的页面, 掉电前同步
     pub weather_api_key: String,           // 获取天气数据api的key
+    pub weather: Option<WeatherResponse>,  // 天气数据
+    pub last_update_weather: u32,          // 最近一次更新天气的小时
 }
 
 impl Default for DeviceConfig {
@@ -66,6 +69,8 @@ impl Default for DeviceConfig {
             boot_times: 0,
             current_page: ActivePage::default(),
             weather_api_key: "e7d95a70480a4d6c9140378d9d100d42".to_string(),
+            weather: None,
+            last_update_weather: 0,
         }
     }
 }
@@ -139,7 +144,7 @@ impl DeviceConfig {
     }
 
     pub fn current_time_is_too_old() -> bool {
-        let now = chrono::Local::now();
+        let now = Local::now();
         now.year() < 2025
     }
 }

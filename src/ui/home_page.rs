@@ -76,7 +76,6 @@ impl HomePageInfo {
         );
         let get_w = |i: usize| info.weather_info.get(i).map_or("Null", |m| m.as_str());
         let weather_content = format!("Today: \n{}\nTomorrow:\n{}", get_w(0), get_w(1));
-        log::info!("weather_content: {weather_content}");
         f.render_widget(
             Paragraph::new(weather_content)
                 .alignment(Alignment::Left)
