@@ -18,6 +18,12 @@ pub struct UiInfo {
     pub sensor: SensorPage,
 }
 
+/// 屏幕事件,
+pub enum ScreenEvent {
+    Refresh(ActivePage),
+    UpdateSensorsData(AllSensorData),
+}
+
 /// 用于包裹 ssd1680返回的错误
 macro_rules! hw_try {
     ($e:expr, $msg:expr) => {
@@ -26,11 +32,10 @@ macro_rules! hw_try {
 }
 
 pub fn mouse_food_test(
-    screen: Arc<Mutex<Screen>>,
+    screen: &mut Screen,
     device_config: Arc<Mutex<DeviceConfig>>,
     set_active_page: ActivePage,
 ) -> anyhow::Result<()> {
-    let mut screen = screen.lock().map_err(|_| anyhow!("Mutex lock error"))?;
     if set_active_page == screen.current_page && !set_active_page.cur_set_page_is_need_refresh() {
         return Ok(());
     }
@@ -45,14 +50,12 @@ pub fn mouse_food_test(
         city: config.city_name.to_string(),
     };
     let sensor = SensorPage {
-        sensor_data: screen
-            .last_sensor_status
-            .unwrap_or(AllSensorData::default()),
+        sensor_data: screen.last_sensor_status.unwrap_or_default(),
     };
     let mut info = UiInfo { home, sensor };
     match set_active_page {
-        ActivePage::Sensor => SensorPage::build_sensor_page(&mut screen, &mut info)?,
-        ActivePage::Home => HomePageInfo::build_home_page(&mut screen, &mut info)?,
+        ActivePage::Sensor => SensorPage::build_sensor_page(screen, &mut info)?,
+        ActivePage::Home => HomePageInfo::build_home_page(screen, &mut info)?,
         ActivePage::Image => anyhow::bail!("not support now"),
         _ => anyhow::bail!("Not find selected page: {set_active_page:?}"),
     }
@@ -71,7 +74,6 @@ pub fn mouse_food_test(
     hw_try!(ssd1680.update_bw_frame(bw_buf.buffer()), "Ssd1680 update");
     hw_try!(ssd1680.display_frame(delay), "Ssd1680 display");
     hw_try!(ssd1680.entry_sleep(), "Ssd1680 sleep");
-    drop(screen);
     Ok(())
 }
 

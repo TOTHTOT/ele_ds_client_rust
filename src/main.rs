@@ -5,7 +5,7 @@ use ele_ds_client_rust::board::{get_clock_ntp, psram};
 use ele_ds_client_rust::communication::http_server::HttpServer;
 use ele_ds_client_rust::communication::weather::Weather;
 use ele_ds_client_rust::device_config::DeviceConfig;
-use ele_ds_client_rust::ui::mouse_food_test;
+use ele_ds_client_rust::ui::{mouse_food_test, ScreenEvent};
 use ele_ds_client_rust::{
     board::peripheral::BoardPeripherals,
     communication::{http_client, ota},
@@ -29,36 +29,40 @@ fn main() -> anyhow::Result<()> {
     let device_config = Arc::new(Mutex::new(device_config));
     let device_config_ui = device_config.clone();
 
-    let screen = board.screen.take().expect("no screen");
-    let screen_main = screen.clone();
-    {
-        let sensor_data = board.read_all_sensor()?;
-        screen
-            .lock()
-            .expect("lock screen failed")
-            .last_sensor_status = Some(sensor_data);
-    }
+    let mut screen = board.screen.take().expect("no screen");
+    // 赋值屏幕默认传感器数据
+    let sensor_data = board.read_all_sensor()?;
+    screen.last_sensor_status = Some(sensor_data);
+
     let screen_exit = board.screen_exit.clone();
     let key_exit = board.key_read_exit.clone();
 
     let (screen_tx, screen_rx) = std::sync::mpsc::channel();
     let screen_tx_main = screen_tx.clone();
     // 上电同步掉电时的页面, 避免保存的页面和实际不一样
-    screen_tx_main.send(power_on_ui_page)?;
+    screen_tx_main.send(ScreenEvent::Refresh(power_on_ui_page))?;
     // 屏幕刷新线程
     let _ = std::thread::Builder::new()
         .stack_size(1024 * 10)
         .name(String::from("epd"))
         .spawn(move || {
             while !screen_exit.load(std::sync::atomic::Ordering::Relaxed) {
-                let Ok(cur_set_page) = screen_rx.recv() else {
+                let Ok(event) = screen_rx.recv() else {
                     continue;
                 };
-                let screen = screen.clone();
-                log::info!("cur_set page: {cur_set_page:?}");
-                if let Err(e) = mouse_food_test(screen, device_config_ui.clone(), cur_set_page) {
-                    log::warn!("refresh screen failed: {e:?}");
-                };
+                match event {
+                    ScreenEvent::Refresh(cur_set_page) => {
+                        log::info!("cur_set page: {cur_set_page:?}");
+                        if let Err(e) =
+                            mouse_food_test(&mut screen, device_config_ui.clone(), cur_set_page)
+                        {
+                            log::warn!("refresh screen failed: {e:?}");
+                        };
+                    }
+                    ScreenEvent::UpdateSensorsData(sensors_data) => {
+                        screen.last_sensor_status = Some(sensors_data);
+                    }
+                }
                 std::thread::sleep(std::time::Duration::from_millis(100));
             }
         });
@@ -73,7 +77,7 @@ fn main() -> anyhow::Result<()> {
             };
             if key_info.click_type == KeyClickedType::SingleClicked {
                 if let Ok(cur_set_page) = ActivePage::try_from(key_info.idx) {
-                    if let Err(e) = screen_tx.send(cur_set_page) {
+                    if let Err(e) = screen_tx.send(ScreenEvent::Refresh(cur_set_page)) {
                         log::warn!("refresh active_page failed: {e:?}");
                     }
                 }
@@ -93,29 +97,25 @@ fn main() -> anyhow::Result<()> {
         let mut board = board
             .lock()
             .map_err(|e| anyhow::anyhow!("lock board failed: {e:?}"))?;
-        let mut screen = screen_main
-            .lock()
-            .map_err(|e| anyhow::anyhow!("lock board failed: {e:?}"))?;
-        screen.last_sensor_status = Some(board.read_all_sensor()?);
-        log::info!("last sensor_status: {:?}", screen.last_sensor_status);
+        let sensors_data = board.read_all_sensor()?;
+        screen_tx_main.send(ScreenEvent::UpdateSensorsData(sensors_data))?;
+        log::info!("last sensor_status: {:?}", sensors_data);
 
         /* 界面更新区分两种情况:
             1. 如果一直在运行状态时每分钟更新时间, 这时要发信号
             2. 如果是从深度睡眠唤醒, 这时就不要再发信号了, 但是还没做
         */
-        if screen.current_page.cur_set_page_is_need_refresh() && loop_times > 1 {
-            screen_tx_main.send(screen.current_page)?;
-        }
-        if screen.current_page == ActivePage::Home || screen.current_page == ActivePage::Sensor {
+        if let Ok(config) = device_config.lock() {
+            // 每分钟更新屏幕, 实际刷不刷新屏幕由屏幕自己决定
+            if loop_times > 1 {
+                screen_tx_main.send(ScreenEvent::Refresh(config.current_page))?;
+            }
             // 如果当前是主页面或者传感器页面就定时刷新数据, 不然的话就睡眠最大时间
-            sleep_time = next_minute_left_time();
-        }
-        {
-            if let Ok(config) = device_config.lock() {
-                config.save_config()?;
-            };
-        }
-        drop(screen);
+            if config.current_page.cur_set_page_is_need_refresh() {
+                sleep_time = next_minute_left_time();
+            }
+            config.save_config()?;
+        };
         drop(board);
 
         loop_times += 1;

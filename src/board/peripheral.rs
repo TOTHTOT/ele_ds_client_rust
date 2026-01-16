@@ -127,8 +127,8 @@ pub struct BoardPeripherals {
     pub key_read_exit: Arc<AtomicBool>, // 发送信号让读按键线程退出
     pub key_rx: Option<std::sync::mpsc::Receiver<PressedKeyInfo>>,
 
-    pub screen: Option<Arc<Mutex<Screen>>>, // 屏幕对象需要被多个线程处理, 比如修改页面, 刷新页面
-    pub screen_exit: Arc<AtomicBool>,       // 发送信号让线程退出
+    pub screen: Option<Screen>, // 屏幕对象需要被多个线程处理, 比如修改页面, 刷新页面
+    pub screen_exit: Arc<AtomicBool>, // 发送信号让线程退出
 }
 
 #[allow(dead_code)]
@@ -197,7 +197,7 @@ impl BoardPeripherals {
         )?;
         let spi = SpiDeviceDriver::new(spi, Some(cs), &spi::config::Config::new())?;
         let screen_exit = Arc::new(AtomicBool::new(false));
-        let screen = Arc::new(Mutex::new(Screen::new(spi, busy, dc, rst, 128, 296)?));
+        let screen = Screen::new(spi, busy, dc, rst, 128, 296)?;
 
         let i2s = peripherals.i2s0;
         // i2s相关初始化
