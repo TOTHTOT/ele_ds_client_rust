@@ -2,6 +2,7 @@ use crate::board::peripheral::{AllSensorData, Screen};
 use crate::communication::weather::WeatherResponse;
 use crate::device_config::DeviceConfig;
 use crate::ui::home_page::HomePageInfo;
+use crate::ui::image_page::ImagePageInfo;
 use crate::ui::sensor_page::SensorPage;
 use crate::ActivePage;
 use anyhow::anyhow;
@@ -11,11 +12,13 @@ use ssd1680::prelude::Display;
 use std::sync::{Arc, Mutex};
 
 pub mod home_page;
+mod image_page;
 pub mod sensor_page;
+
 #[derive(Default)]
 pub struct UiInfo {
-    pub home: HomePageInfo,
-    pub sensor: SensorPage,
+    pub net_state: bool,
+    pub battery: u8,
 }
 
 /// 屏幕事件,
@@ -43,20 +46,34 @@ pub fn mouse_food_test(
         .lock()
         .map_err(|_| anyhow!("Mutex lock error"))?;
     let weather_str = config.weather.clone().unwrap_or(WeatherResponse::default());
-    let home = HomePageInfo {
+
+    let ui_info = UiInfo {
         net_state: false,
-        weather_info: weather_str.get_ui_need_data()?,
         battery: 10,
-        city: config.city_name.to_string(),
     };
-    let sensor = SensorPage {
-        sensor_data: screen.last_sensor_status.unwrap_or_default(),
-    };
-    let mut info = UiInfo { home, sensor };
     match set_active_page {
-        ActivePage::Sensor => SensorPage::build_sensor_page(screen, &mut info)?,
-        ActivePage::Home => HomePageInfo::build_home_page(screen, &mut info)?,
-        ActivePage::Image => anyhow::bail!("not support now"),
+        ActivePage::Sensor => {
+            let mut sensor = SensorPage {
+                sensor_data: screen.last_sensor_status.unwrap_or_default(),
+                ui_info,
+            };
+            SensorPage::build_sensor_page(screen, &mut sensor)?;
+        }
+        ActivePage::Home => {
+            let mut home = HomePageInfo {
+                weather_info: weather_str.get_ui_need_data()?,
+                city: config.city_name.to_string(),
+                ui_info,
+            };
+            HomePageInfo::build_home_page(screen, &mut home)?;
+        }
+        ActivePage::Image => {
+            let mut image = ImagePageInfo {
+                image_path: "/fat/system/images/test.bmp".to_string(),
+                ui_info,
+            };
+            ImagePageInfo::build_image_page(screen, &mut image)?;
+        }
         _ => anyhow::bail!("Not find selected page: {set_active_page:?}"),
     }
     config.current_page = set_active_page;
@@ -77,7 +94,7 @@ pub fn mouse_food_test(
     Ok(())
 }
 
-pub(super) fn general_block(f: &mut Frame, info: &HomePageInfo) -> Rect {
+pub(super) fn general_block(f: &mut Frame, info: &UiInfo) -> Rect {
     let outer_block = Block::bordered()
         .border_style(Style::new().black())
         .title(format!(

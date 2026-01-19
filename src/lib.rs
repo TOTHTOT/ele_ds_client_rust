@@ -12,15 +12,17 @@ pub mod ui;
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(usize)]
 pub enum ActivePage {
-    None,
-    FullTIme, // 双击左边按键
-    Sensor,   // 单击左边按键
+    Sensor, // 单击左边按键
     #[default]
     Home, // 单击中间按键
-    Image,    // 单击右边按键
+    Image,  // 单击右边按键
+
+    FullTIme,    // 双击左边按键
+    Setting,     // 双击中间按键
     FullWeather, // 双击右边按键
-    Setting,  // 双击中间按键
-    About,    // 三击中间按键
+
+    About, // 三击中间按键
+    None,
 }
 
 impl ActivePage {

@@ -8,9 +8,10 @@ use std::default::Default;
 #[derive(Default)]
 pub struct SensorPage {
     pub sensor_data: AllSensorData,
+    pub ui_info: UiInfo,
 }
 impl SensorPage {
-    pub fn build_sensor_page(screen: &mut Screen, info: &mut UiInfo) -> anyhow::Result<()> {
+    pub fn build_sensor_page(screen: &mut Screen, info: &mut SensorPage) -> anyhow::Result<()> {
         {
             let config = EmbeddedBackendConfig {
                 font_regular: fonts::MONO_6X13,
@@ -22,8 +23,8 @@ impl SensorPage {
         }
         Ok(())
     }
-    fn sensor_page(f: &mut Frame, info: &mut UiInfo) {
-        let main_area = general_block(f, &info.home);
+    fn sensor_page(f: &mut Frame, info: &mut SensorPage) {
+        let main_area = general_block(f, &info.ui_info);
 
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -40,11 +41,11 @@ impl SensorPage {
         let sensors = [
             (
                 "TEMP",
-                format!("{:.1} C", info.sensor.sensor_data.sht3x_measure.temperature),
+                format!("{:.1} C", info.sensor_data.sht3x_measure.temperature),
             ),
             (
                 "HUMI",
-                format!("{:.1} %", info.sensor.sensor_data.sht3x_measure.humidity),
+                format!("{:.1} %", info.sensor_data.sht3x_measure.humidity),
             ),
             ("PRES", format!("{:.0} hPa", 0)),
             ("LUX ", format!("{} lx", 0)),

@@ -9,27 +9,21 @@ use ssd1680::graphics::DisplayAnyIn;
 use tinybmp::Bmp;
 
 pub struct HomePageInfo {
-    pub net_state: bool,
     pub weather_info: [String; 3],
-    pub battery: u8,
     pub city: String,
+    pub ui_info: UiInfo,
 }
 impl Default for HomePageInfo {
     fn default() -> Self {
         Self {
-            net_state: true,
-            weather_info: [
-                "Sunny 25℃".to_string(),
-                "Sunny 25℃".to_string(),
-                "Sunny 25℃".to_string(),
-            ],
-            battery: 100,
+            weather_info: ["".to_string(), "".to_string(), "".to_string()],
             city: "Fuzhou".to_string(),
+            ui_info: UiInfo::default(),
         }
     }
 }
 impl HomePageInfo {
-    pub fn build_home_page(screen: &mut Screen, info: &mut UiInfo) -> anyhow::Result<()> {
+    pub fn build_home_page(screen: &mut Screen, info: &mut HomePageInfo) -> anyhow::Result<()> {
         {
             let config = EmbeddedBackendConfig {
                 font_regular: fonts::MONO_6X13,
@@ -37,14 +31,14 @@ impl HomePageInfo {
             };
             let backend = EmbeddedBackend::new(&mut screen.bw_buf, config);
             let mut terminal = Terminal::new(backend)?;
-            terminal.draw(|f| Self::home_page(f, &info.home))?;
+            terminal.draw(|f| Self::home_page(f, info))?;
         }
         Self::pad_time_date(&mut screen.bw_buf)?;
         Ok(())
     }
 
     fn home_page(f: &mut Frame, info: &HomePageInfo) {
-        let main_area = general_block(f, info);
+        let main_area = general_block(f, &info.ui_info);
 
         // 将内部区域垂直切分为 Clock (60%) 和 Weather (40%)
         let main_chunks = Layout::default()

@@ -83,9 +83,10 @@
   
 - 发送图片资源
 ```shell
+cd assets/tool/generate_number_bmp
 for file in time_num_data/*.bmp; do
   filename=$(basename "$file")
   echo "正在上传: $filename ..."
-  curl -X PUT --data-binary "@$file" "http://192.168.137.28/fat/system/tmd/$filename"
+  curl -X PUT --data-binary "@$file" "http://192.168.137.183/fat/system/tmd/$filename"
 done
 ```
