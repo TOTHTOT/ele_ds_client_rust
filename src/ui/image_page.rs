@@ -31,7 +31,7 @@ impl ImagePageInfo {
             };
             let backend = EmbeddedBackend::new(&mut screen.bw_buf, config);
             let mut terminal = Terminal::new(backend)?;
-            terminal.draw(|f| Self::image_page(f, info))?;
+            terminal.draw(|f| info.image_page(f))?;
         }
         let main_area = Rect {
             x: 1,
@@ -44,8 +44,8 @@ impl ImagePageInfo {
         Ok(())
     }
 
-    fn image_page(f: &mut Frame, info: &ImagePageInfo) {
-        let main_area = general_block(f, &info.ui_info);
+    pub fn image_page(&mut self, f: &mut Frame) {
+        let main_area = general_block(f, &self.ui_info);
         log::info!("main_area: {main_area:?}");
     }
 

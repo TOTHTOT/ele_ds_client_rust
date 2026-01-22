@@ -22,6 +22,8 @@ impl Default for HomePageInfo {
         }
     }
 }
+
+#[allow(dead_code)]
 impl HomePageInfo {
     pub fn build_home_page(screen: &mut Screen, info: &mut HomePageInfo) -> anyhow::Result<()> {
         {
@@ -31,14 +33,14 @@ impl HomePageInfo {
             };
             let backend = EmbeddedBackend::new(&mut screen.bw_buf, config);
             let mut terminal = Terminal::new(backend)?;
-            terminal.draw(|f| Self::home_page(f, info))?;
+            terminal.draw(|f| info.home_page(f))?;
         }
-        Self::pad_time_date(&mut screen.bw_buf)?;
+        // Self::pad_time_date_image(&mut screen.bw_buf)?;
         Ok(())
     }
 
-    fn home_page(f: &mut Frame, info: &HomePageInfo) {
-        let main_area = general_block(f, &info.ui_info);
+    pub fn home_page(&mut self, f: &mut Frame) {
+        let main_area = general_block(f, &self.ui_info);
 
         // 将内部区域垂直切分为 Clock (60%) 和 Weather (40%)
         let main_chunks = Layout::default()
@@ -68,18 +70,18 @@ impl HomePageInfo {
                 .wrap(Wrap { trim: true }),
             clock_chunks[1],
         );
-        let get_w = |i: usize| info.weather_info.get(i).map_or("Null", |m| m.as_str());
+        let get_w = |i: usize| self.weather_info.get(i).map_or("Null", |m| m.as_str());
         let weather_content = format!("Today: \n{}\nTomorrow:\n{}", get_w(0), get_w(1));
         f.render_widget(
             Paragraph::new(weather_content)
                 .alignment(Alignment::Left)
-                .block(Block::bordered().title(format!(" {} Weather ", info.city))),
+                .block(Block::bordered().title(format!(" {} Weather ", self.city))),
             main_chunks[1],
         );
     }
 
     /// 由于需要显示很大的时间但是 mousefood 不能单独设置字体, 这里只能在外部根据坐标填充时间
-    pub(crate) fn pad_time_date(buf: &mut DisplayAnyIn) -> anyhow::Result<()> {
+    pub(crate) fn pad_time_date_image(buf: &mut DisplayAnyIn) -> anyhow::Result<()> {
         let time_str = chrono::Local::now().format("%H:%M").to_string();
         let mut current_x = 25; // 这里的初始值决定了整体左右偏移
         let y_position = 35; // 这里的初始值决定了上下偏移

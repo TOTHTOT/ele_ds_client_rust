@@ -5,6 +5,7 @@ use ele_ds_client_rust::board::{get_clock_ntp, psram};
 use ele_ds_client_rust::communication::http_server::HttpServer;
 use ele_ds_client_rust::communication::weather::Weather;
 use ele_ds_client_rust::device_config::DeviceConfig;
+use ele_ds_client_rust::ui::popup::PopupMsg;
 use ele_ds_client_rust::ui::{mouse_food_test, ScreenEvent};
 use ele_ds_client_rust::{
     board::peripheral::BoardPeripherals,
@@ -53,14 +54,28 @@ fn main() -> anyhow::Result<()> {
                 match event {
                     ScreenEvent::Refresh(cur_set_page) => {
                         log::info!("cur_set page: {cur_set_page:?}");
-                        if let Err(e) =
-                            mouse_food_test(&mut screen, device_config_ui.clone(), cur_set_page)
-                        {
+                        if let Err(e) = mouse_food_test(
+                            &mut screen,
+                            device_config_ui.clone(),
+                            cur_set_page,
+                            None,
+                        ) {
                             log::warn!("refresh screen failed: {e:?}");
                         };
                     }
                     ScreenEvent::UpdateSensorsData(sensors_data) => {
                         screen.last_sensor_status = Some(sensors_data);
+                    }
+                    ScreenEvent::Popup(msg) => {
+                        let cur_page = screen.current_page;
+                        if let Err(e) = mouse_food_test(
+                            &mut screen,
+                            device_config_ui.clone(),
+                            cur_page,
+                            Some(msg),
+                        ) {
+                            log::warn!("show popup screen failed: {e:?}");
+                        };
                     }
                 }
                 std::thread::sleep(std::time::Duration::from_millis(100));
@@ -80,6 +95,14 @@ fn main() -> anyhow::Result<()> {
                     if let Err(e) = screen_tx.send(ScreenEvent::Refresh(cur_set_page)) {
                         log::warn!("refresh active_page failed: {e:?}");
                     }
+                }
+            }
+            if key_info.click_type == KeyClickedType::DoubleClicked {
+                if let Err(e) = screen_tx.send(ScreenEvent::Popup(PopupMsg::new(
+                    "Warning".to_string(),
+                    "test".to_string(),
+                ))) {
+                    log::warn!("Popup failed: {e:?}");
                 }
             }
             log::info!("{key_info:?}");

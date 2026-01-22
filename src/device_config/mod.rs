@@ -64,7 +64,7 @@ impl Default for DeviceConfig {
             requery_upgrade_time_minutes: 1440,
             wifi_max_link_time: 30,
             time_zone: "CST-8".to_string(),
-            city_name: "Fuzhou".to_string(),
+            city_name: "FujianFuzhou".to_string(),
             wifi_connect_interval: 60,
             boot_times: 0,
             current_page: ActivePage::default(),

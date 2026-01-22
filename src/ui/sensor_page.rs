@@ -1,8 +1,7 @@
 use crate::board::peripheral::AllSensorData;
-use crate::ui::{general_block, Screen, UiInfo};
-use mousefood::prelude::{Alignment, Constraint, Direction, Frame, Layout, Terminal};
+use crate::ui::{general_block, UiInfo};
+use mousefood::prelude::{Alignment, Constraint, Direction, Frame, Layout};
 use mousefood::ratatui::widgets::Paragraph;
-use mousefood::{fonts, EmbeddedBackend, EmbeddedBackendConfig};
 use std::default::Default;
 
 #[derive(Default)]
@@ -11,20 +10,20 @@ pub struct SensorPage {
     pub ui_info: UiInfo,
 }
 impl SensorPage {
-    pub fn build_sensor_page(screen: &mut Screen, info: &mut SensorPage) -> anyhow::Result<()> {
-        {
-            let config = EmbeddedBackendConfig {
-                font_regular: fonts::MONO_6X13,
-                ..Default::default()
-            };
-            let backend = EmbeddedBackend::new(&mut screen.bw_buf, config);
-            let mut terminal = Terminal::new(backend)?;
-            terminal.draw(|f| Self::sensor_page(f, info))?;
-        }
-        Ok(())
-    }
-    fn sensor_page(f: &mut Frame, info: &mut SensorPage) {
-        let main_area = general_block(f, &info.ui_info);
+    // pub fn build_sensor_page(screen: &mut Screen, info: &mut SensorPage) -> anyhow::Result<()> {
+    //     {
+    //         let config = EmbeddedBackendConfig {
+    //             font_regular: fonts::MONO_6X13,
+    //             ..Default::default()
+    //         };
+    //         let backend = EmbeddedBackend::new(&mut screen.bw_buf, config);
+    //         let mut terminal = Terminal::new(backend)?;
+    //         terminal.draw(|f| Self::sensor_page(f, info))?;
+    //     }
+    //     Ok(())
+    // }
+    pub fn sensor_page(&mut self, f: &mut Frame) {
+        let main_area = general_block(f, &self.ui_info);
 
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -41,11 +40,11 @@ impl SensorPage {
         let sensors = [
             (
                 "TEMP",
-                format!("{:.1} C", info.sensor_data.sht3x_measure.temperature),
+                format!("{:.1} C", self.sensor_data.sht3x_measure.temperature),
             ),
             (
                 "HUMI",
-                format!("{:.1} %", info.sensor_data.sht3x_measure.humidity),
+                format!("{:.1} %", self.sensor_data.sht3x_measure.humidity),
             ),
             ("PRES", format!("{:.0} hPa", 0)),
             ("LUX ", format!("{} lx", 0)),
