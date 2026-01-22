@@ -113,7 +113,7 @@ impl Screen {
 #[allow(dead_code)]
 pub struct BoardPeripherals {
     pub wifi: EspWifi<'static>,
-    pub es8388: Arc<Mutex<Es8388Type>>,
+    pub es8388: Option<Es8388Type>,
     vout_3v3: PinDriver<'static, AnyIOPin, Output>,
     sht3x_rst: PinDriver<'static, AnyIOPin, Output>,
     pub sht3x: Sht3x<SharedI2cDevice<Arc<Mutex<I2cDriver<'static>>>>, Ets>,
@@ -213,38 +213,18 @@ impl BoardPeripherals {
         .context("Failed to initialize I2S bidirectional driver")?;
         let es8388_i2c = SharedI2cDevice(iic_bus.clone());
         let en_spk = PinDriver::output(peripherals.pins.gpio20.downgrade())?;
-        let mut es8388 = Es8388::new(
+        let es8388 = Es8388::new(
             i2s_driver,
             es8388_i2c,
             en_spk,
             es8388::driver::CHIP_ADDR,
             RunMode::AdcDac,
         );
-        es8388.init()?;
-        es8388.start()?;
-        es8388.set_speaker(true)?;
-        let regs = es8388.read_all()?;
-        log::info!("es8388 regs: {:?}", &regs);
-        let es8388 = Arc::new(Mutex::new(es8388));
-        // let es8388_clone = es8388.clone();
-        // std::thread::spawn(move || loop {
-        //     let mut es8388 = es8388_clone.lock().unwrap();
-        //     let buf = Box::new([100_u8; 1024]);
-        //     // if let Err(e) = es8388.read_audio(&mut *buf, 1000) {
-        //     //     log::error!("Failed to read audio buffer: {e:?}");
-        //     // }
-        //     // log::info!("es8388 = {buf:?}");
-        //     if let Err(e) = es8388.write_audio(&*buf, 1000) {
-        //         log::error!("Failed to write audio buffer: {e:?}");
-        //     }
-        //     log::info!("es8388: {:?}", &buf);
-        //     std::thread::sleep(std::time::Duration::from_millis(5000));
-        // });
         let wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
 
         Ok(BoardPeripherals {
             wifi,
-            es8388,
+            es8388: Some(es8388),
             vout_3v3,
             sht3x_rst,
             sht3x,

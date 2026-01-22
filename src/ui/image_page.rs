@@ -74,15 +74,15 @@ impl ImagePageInfo {
 
                 let image_pos = Point::new(px_area_x + x_offset, px_area_y + y_offset);
 
-                log::info!("Drawing image at pixel pos: {:?}", image_pos);
+                log::info!("Drawing image at pixel pos: {image_pos:?}");
 
                 let image = Image::new(&bmp, image_pos);
                 image
                     .draw(buf)
-                    .map_err(|e| anyhow::anyhow!("Draw error: {:?}", e))?;
+                    .map_err(|e| anyhow::anyhow!("Draw error: {e:?}"))?;
             }
             Err(e) => {
-                log::error!("BMP parse error: {:?}", e);
+                log::error!("BMP parse error: {e:?}");
             }
         }
         Ok(())

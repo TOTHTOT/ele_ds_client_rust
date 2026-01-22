@@ -23,6 +23,7 @@ pub enum RunMode {
     AdcDac,
 }
 
+#[allow(dead_code)]
 impl<'d, I2C, EnSpk> Es8388<'d, I2C, EnSpk>
 where
     I2C: embedded_hal::i2c::I2c,
@@ -46,7 +47,6 @@ where
 
     /// 初始化芯片, 一些寄存器会先变成复位状态, 知道真正开始时才会设置值, 在start()函数中配置
     pub fn init(&mut self) -> anyhow::Result<()> {
-        self.test_i2c_rw()?;
         // 使用默认值的可以不发送
         self.write_reg(Command::ChipControl1, 0b0001_0110)?;
         self.write_reg(Command::ChipControl2, Command::ChipControl2.default_value())?;
@@ -89,7 +89,7 @@ where
             self.write_reg(Command::AdcPowerManagement, 0x00)?;
         }
         if self.mode == RunMode::Dac || self.mode == RunMode::AdcDac {
-            self.write_reg(Command::DacPowerManagement, 0b1111_0000)?;
+            self.write_reg(Command::DacPowerManagement, 0b1111_1100)?;
             self.write_reg(Command::DacControl17, 0x50)?;
             self.write_reg(Command::DacControl20, 0x50)?;
             self.set_voice_volume(50)?;
@@ -159,12 +159,12 @@ where
     /// buffer: 16-bit PCM 数据
     /// timeout_ms: 写入超时时间
     pub fn write_audio(&mut self, data: &[u8], timeout_ms: u32) -> anyhow::Result<usize> {
-        self.set_speaker(true)?;
+        // self.set_speaker(true)?;
         let size = self
             .i2s
             .write(data, timeout_ms)
             .map_err(|e| anyhow::anyhow!("I2S Write Error: {e:?}"))?;
-        self.set_speaker(false)?;
+        // self.set_speaker(false)?;
         Ok(size)
     }
 
@@ -204,7 +204,7 @@ where
 pub fn default_i2s_config() -> StdConfig {
     let channel_cfg = config::Config::default();
     let i2s_std_clk_config = StdClkConfig::new(44100, Default::default(), MclkMultiple::M256);
-    let i2s_slot_cfg = StdSlotConfig::philips_slot_default(DataBitWidth::Bits16, SlotMode::Mono);
+    let i2s_slot_cfg = StdSlotConfig::philips_slot_default(DataBitWidth::Bits16, SlotMode::Stereo);
     StdConfig::new(
         channel_cfg,
         i2s_std_clk_config,

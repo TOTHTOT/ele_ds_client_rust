@@ -42,6 +42,30 @@ fn main() -> anyhow::Result<()> {
     let screen_tx_main = screen_tx.clone();
     // 上电同步掉电时的页面, 避免保存的页面和实际不一样
     screen_tx_main.send(ScreenEvent::Refresh(power_on_ui_page))?;
+
+    let mut es8388 = board.es8388.take().expect("no es8388");
+    let _ = std::thread::spawn(move || {
+        es8388.init().unwrap();
+        es8388.start().unwrap();
+        es8388.set_speaker(true).unwrap();
+        let regs = es8388.read_all().unwrap();
+        log::info!("es8388 regs: {:?}", &regs);
+        es8388.set_speaker(true).unwrap();
+        // let buf = generate_sine_wave(440.0, 44100.0, 1000);
+        loop {
+            // if let Err(e) = es8388.read_audio(&mut *buf, 1000) {
+            //     log::error!("Failed to read audio buffer: {e:?}");
+            // }
+            // log::info!("es8388 = {buf:?}");
+
+            // if let Err(e) = es8388.write_audio(&*buf, 1000) {
+            //     log::error!("Failed to write audio buffer: {e:?}");
+            // }
+            // log::info!("es8388: {:?}", &buf);
+            std::thread::sleep(std::time::Duration::from_millis(2000));
+        }
+    });
+
     // 屏幕刷新线程
     let _ = std::thread::Builder::new()
         .stack_size(1024 * 10)
@@ -122,7 +146,7 @@ fn main() -> anyhow::Result<()> {
             .map_err(|e| anyhow::anyhow!("lock board failed: {e:?}"))?;
         let sensors_data = board.read_all_sensor()?;
         screen_tx_main.send(ScreenEvent::UpdateSensorsData(sensors_data))?;
-        log::info!("last sensor_status: {:?}", sensors_data);
+        log::info!("last sensor_status: {sensors_data:?}");
 
         /* 界面更新区分两种情况:
             1. 如果一直在运行状态时每分钟更新时间, 这时要发信号
