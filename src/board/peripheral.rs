@@ -7,6 +7,7 @@ use crate::device_config::DeviceConfig;
 use crate::file_system::nvs_flash_filesystem_init;
 use crate::ActivePage;
 use anyhow::Context;
+use awedio::manager::Manager;
 use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::{Circle, PrimitiveStyle, Rectangle};
 use embedded_sht3x::{Measurement, Repeatability, Sht3x, DEFAULT_I2C_ADDRESS};
@@ -37,11 +38,7 @@ type Ssd1680DisplayType = Ssd1680<
     PinDriver<'static, AnyIOPin, Output>, // DC
     PinDriver<'static, AnyIOPin, Output>, // RST
 >;
-type Es8388Type = Es8388<
-    'static,
-    SharedI2cDevice<Arc<Mutex<I2cDriver<'static>>>>,
-    PinDriver<'static, AnyIOPin, Output>,
->;
+type Es8388Type = Es8388<SharedI2cDevice<Arc<Mutex<I2cDriver<'static>>>>>;
 #[derive(Debug, Default, Copy, Clone)]
 #[allow(dead_code)]
 pub struct AllSensorData {
@@ -113,7 +110,11 @@ impl Screen {
 #[allow(dead_code)]
 pub struct BoardPeripherals {
     pub wifi: EspWifi<'static>,
-    pub es8388: Option<Es8388Type>,
+    // 音频相关
+    pub audio_manager: Manager,
+    pub es8388: Es8388Type,
+    pub spk_en: PinDriver<'static, AnyIOPin, Output>,
+
     vout_3v3: PinDriver<'static, AnyIOPin, Output>,
     sht3x_rst: PinDriver<'static, AnyIOPin, Output>,
     pub sht3x: Sht3x<SharedI2cDevice<Arc<Mutex<I2cDriver<'static>>>>, Ets>,
@@ -201,30 +202,31 @@ impl BoardPeripherals {
 
         let i2s = peripherals.i2s0;
         // i2s相关初始化
-        let i2s_driver = I2sDriver::new_std_bidir(
+        let i2s_driver = I2sDriver::new_std_tx(
             i2s,
             &es8388::driver::default_i2s_config(),
-            peripherals.pins.gpio47,      // bclk i2s总线的时钟
-            peripherals.pins.gpio45,      // din codec支持录音功能可以把麦克风数据回传给单片机
+            peripherals.pins.gpio47, // bclk i2s总线的时钟
+            // peripherals.pins.gpio45,      // din codec支持录音功能可以把麦克风数据回传给单片机
             peripherals.pins.gpio1,       // dout 音频输出
             Some(peripherals.pins.gpio2), // mclk 给codec芯片提供的始终
             peripherals.pins.gpio48,      // ws 左右声道选择
         )
         .context("Failed to initialize I2S bidirectional driver")?;
+        let backend = awedio_esp32::Esp32Backend::with_defaults(i2s_driver, 1, 44100, 128);
+        let audio_manager = backend.start();
         let es8388_i2c = SharedI2cDevice(iic_bus.clone());
-        let en_spk = PinDriver::output(peripherals.pins.gpio20.downgrade())?;
-        let es8388 = Es8388::new(
-            i2s_driver,
-            es8388_i2c,
-            en_spk,
-            es8388::driver::CHIP_ADDR,
-            RunMode::AdcDac,
-        );
+        let mut spk_en = PinDriver::output(peripherals.pins.gpio20.downgrade())?;
+        spk_en.set_high()?;
+        let mut es8388 = Es8388::new(es8388_i2c, es8388::driver::CHIP_ADDR, RunMode::AdcDac);
+        es8388.init()?;
         let wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
 
         Ok(BoardPeripherals {
             wifi,
-            es8388: Some(es8388),
+            es8388,
+            audio_manager,
+            spk_en,
+
             vout_3v3,
             sht3x_rst,
             sht3x,
