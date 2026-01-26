@@ -1,9 +1,11 @@
 use crate::board::peripheral::Screen;
+use crate::ui;
 use crate::ui::{general_block, UiInfo};
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::{image::Image, prelude::*};
 use mousefood::prelude::*;
-use mousefood::ratatui::widgets::canvas::{Canvas, Context, Line};
+use mousefood::ratatui::symbols::Marker;
+use mousefood::ratatui::widgets::canvas::Canvas;
 use mousefood::ratatui::widgets::{Block, Paragraph, Wrap};
 use mousefood::{fonts, EmbeddedBackend};
 use ssd1680::graphics::DisplayAnyIn;
@@ -65,18 +67,10 @@ impl HomePageInfo {
 
         f.render_widget(
             Canvas::default()
+                .marker(Marker::HalfBlock)
                 .x_bounds([0.0, 100.0])
                 .y_bounds([0.0, 100.0])
-                .paint(|ctx| {
-                    let now = chrono::Local::now();
-                    let time_str = now.format("%H:%M").to_string();
-                    let w = 5.0 * 2.0;
-                    let h = 30.0 * 2.0;
-                    let y_offset = (100.0 - h) / 2.0;
-                    for (i, c) in time_str.chars().enumerate() {
-                        Self::draw_big_digit(ctx, (10.0 + w) * i as f64, y_offset, c, w, h);
-                    }
-                }),
+                .paint(ui::canvas_draw_current_time),
             clock_chunks[0],
         );
         let now = chrono::Local::now();
@@ -95,146 +89,6 @@ impl HomePageInfo {
                 .block(Block::bordered().title(format!(" {} Weather ", self.city))),
             main_chunks[1],
         );
-    }
-
-    // 绘制 大数字 的函数 使用 canvas
-    fn draw_big_digit(
-        ctx: &mut Context,
-        x_offset: f64,
-        y_offset: f64,
-        digit: char,
-        w: f64,
-        h: f64,
-    ) {
-        let color = Color::Black;
-
-        let top = Line {
-            x1: x_offset,
-            y1: y_offset + h,
-            x2: x_offset + w,
-            y2: y_offset + h,
-            color,
-        };
-        let mid = Line {
-            x1: x_offset,
-            y1: y_offset + h / 2.0,
-            x2: x_offset + w,
-            y2: y_offset + h / 2.0,
-            color,
-        };
-        let bottom = Line {
-            x1: x_offset,
-            y1: y_offset,
-            x2: x_offset + w,
-            y2: y_offset,
-            color,
-        };
-        let left_t = Line {
-            x1: x_offset,
-            y1: y_offset + h,
-            x2: x_offset,
-            y2: y_offset + h / 2.0,
-            color,
-        };
-        let left_b = Line {
-            x1: x_offset,
-            y1: y_offset + h / 2.0,
-            x2: x_offset,
-            y2: y_offset,
-            color,
-        };
-        let right_t = Line {
-            x1: x_offset + w,
-            y1: y_offset + h,
-            x2: x_offset + w,
-            y2: y_offset + h / 2.0,
-            color,
-        };
-        let right_b = Line {
-            x1: x_offset + w,
-            y1: y_offset + h / 2.0,
-            x2: x_offset + w,
-            y2: y_offset,
-            color,
-        };
-
-        match digit {
-            '0' => {
-                ctx.draw(&top);
-                ctx.draw(&bottom);
-                ctx.draw(&left_t);
-                ctx.draw(&left_b);
-                ctx.draw(&right_t);
-                ctx.draw(&right_b);
-            }
-            '1' => {
-                ctx.draw(&right_t);
-                ctx.draw(&right_b);
-            }
-            '2' => {
-                ctx.draw(&top);
-                ctx.draw(&mid);
-                ctx.draw(&bottom);
-                ctx.draw(&right_t);
-                ctx.draw(&left_b);
-            }
-            '3' => {
-                ctx.draw(&top);
-                ctx.draw(&mid);
-                ctx.draw(&bottom);
-                ctx.draw(&right_t);
-                ctx.draw(&right_b);
-            }
-            '4' => {
-                ctx.draw(&mid);
-                ctx.draw(&left_t);
-                ctx.draw(&right_t);
-                ctx.draw(&right_b);
-            }
-            '5' => {
-                ctx.draw(&top);
-                ctx.draw(&mid);
-                ctx.draw(&bottom);
-                ctx.draw(&left_t);
-                ctx.draw(&right_b);
-            }
-            '6' => {
-                ctx.draw(&top);
-                ctx.draw(&mid);
-                ctx.draw(&bottom);
-                ctx.draw(&left_t);
-                ctx.draw(&left_b);
-                ctx.draw(&right_b);
-            }
-            '7' => {
-                ctx.draw(&top);
-                ctx.draw(&right_t);
-                ctx.draw(&right_b);
-            }
-            '8' => {
-                ctx.draw(&top);
-                ctx.draw(&mid);
-                ctx.draw(&bottom);
-                ctx.draw(&left_t);
-                ctx.draw(&left_b);
-                ctx.draw(&right_t);
-                ctx.draw(&right_b);
-            }
-            '9' => {
-                ctx.draw(&top);
-                ctx.draw(&mid);
-                ctx.draw(&bottom);
-                ctx.draw(&left_t);
-                ctx.draw(&right_t);
-                ctx.draw(&right_b);
-            }
-            ':' => {
-                // 画两个点
-                ctx.print(x_offset + w / 1.0, y_offset + h * 0.7, ".");
-                ctx.print(x_offset + w / 1.0, y_offset + h * 0.3, ".");
-            }
-            _ => {}
-        }
     }
 
     /// 由于需要显示很大的时间但是 mousefood 不能单独设置字体, 这里只能在外部根据坐标填充时间,

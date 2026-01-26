@@ -1,6 +1,5 @@
 use chrono::Timelike;
 use ele_ds_client_rust::board::button::KeyClickedType;
-use ele_ds_client_rust::board::es8388::play_sine_wav;
 use ele_ds_client_rust::board::power_manage::next_minute_left_time;
 use ele_ds_client_rust::board::{get_clock_ntp, psram};
 use ele_ds_client_rust::communication::http_server::HttpServer;

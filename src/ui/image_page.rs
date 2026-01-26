@@ -1,4 +1,5 @@
 use crate::board::peripheral::Screen;
+use crate::ui;
 use crate::ui::{general_block, UiInfo};
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::{image::Image, prelude::*};
@@ -47,6 +48,14 @@ impl ImagePageInfo {
     pub fn image_page(&mut self, f: &mut Frame) {
         let main_area = general_block(f, &self.ui_info);
         log::info!("main_area: {main_area:?}");
+        f.render_widget(
+            Canvas::default()
+                .marker(Marker::HalfBlock)
+                .x_bounds([0.0, 100.0])
+                .y_bounds([0.0, 100.0])
+                .paint(ui::canvas_draw_current_time),
+            main_area,
+        );
     }
 
     fn pat_image(

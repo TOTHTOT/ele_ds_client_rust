@@ -5,9 +5,10 @@ use crate::ui::home_page::HomePageInfo;
 use crate::ui::image_page::ImagePageInfo;
 use crate::ui::popup::PopupMsg;
 use crate::ui::sensor_page::SensorPage;
-use crate::ActivePage;
+use crate::{ui, ActivePage};
 use anyhow::anyhow;
-use mousefood::prelude::{Frame, Rect, Style, Stylize, Terminal};
+use mousefood::prelude::{Color, Frame, Rect, Style, Stylize, Terminal};
+use mousefood::ratatui::widgets::canvas::{Context, Line, Rectangle};
 use mousefood::ratatui::widgets::Block;
 use mousefood::{fonts, EmbeddedBackend, EmbeddedBackendConfig};
 use ssd1680::prelude::Display;
@@ -152,4 +153,205 @@ pub(super) fn general_block(f: &mut Frame, info: &UiInfo) -> Rect {
     let main_area = outer_block.inner(f.area());
     f.render_widget(outer_block, f.area());
     main_area
+}
+
+// 绘制 大数字 的函数 使用 canvas
+pub(crate) fn draw_big_digit(
+    ctx: &mut Context,
+    x_offset: f64,
+    y_offset: f64,
+    digit: char,
+    w: f64,
+    h: f64,
+) {
+    let color = Color::Black;
+
+    let top = Line {
+        x1: x_offset,
+        y1: y_offset + h,
+        x2: x_offset + w,
+        y2: y_offset + h,
+        color,
+    };
+    let mid = Line {
+        x1: x_offset,
+        y1: y_offset + h / 2.0,
+        x2: x_offset + w,
+        y2: y_offset + h / 2.0,
+        color,
+    };
+    let bottom = Line {
+        x1: x_offset,
+        y1: y_offset,
+        x2: x_offset + w,
+        y2: y_offset,
+        color,
+    };
+    let left_t = Line {
+        x1: x_offset,
+        y1: y_offset + h,
+        x2: x_offset,
+        y2: y_offset + h / 2.0,
+        color,
+    };
+    let left_b = Line {
+        x1: x_offset,
+        y1: y_offset + h / 2.0,
+        x2: x_offset,
+        y2: y_offset,
+        color,
+    };
+    let right_t = Line {
+        x1: x_offset + w,
+        y1: y_offset + h,
+        x2: x_offset + w,
+        y2: y_offset + h / 2.0,
+        color,
+    };
+    let right_b = Line {
+        x1: x_offset + w,
+        y1: y_offset + h / 2.0,
+        x2: x_offset + w,
+        y2: y_offset,
+        color,
+    };
+
+    match digit {
+        '0' => {
+            ctx.draw(&top);
+            ctx.draw(&bottom);
+            ctx.draw(&left_t);
+            ctx.draw(&left_b);
+            ctx.draw(&right_t);
+            ctx.draw(&right_b);
+        }
+        '1' => {
+            ctx.draw(&right_t);
+            ctx.draw(&right_b);
+        }
+        '2' => {
+            ctx.draw(&top);
+            ctx.draw(&mid);
+            ctx.draw(&bottom);
+            ctx.draw(&right_t);
+            ctx.draw(&left_b);
+        }
+        '3' => {
+            ctx.draw(&top);
+            ctx.draw(&mid);
+            ctx.draw(&bottom);
+            ctx.draw(&right_t);
+            ctx.draw(&right_b);
+        }
+        '4' => {
+            ctx.draw(&mid);
+            ctx.draw(&left_t);
+            ctx.draw(&right_t);
+            ctx.draw(&right_b);
+        }
+        '5' => {
+            ctx.draw(&top);
+            ctx.draw(&mid);
+            ctx.draw(&bottom);
+            ctx.draw(&left_t);
+            ctx.draw(&right_b);
+        }
+        '6' => {
+            ctx.draw(&top);
+            ctx.draw(&mid);
+            ctx.draw(&bottom);
+            ctx.draw(&left_t);
+            ctx.draw(&left_b);
+            ctx.draw(&right_b);
+        }
+        '7' => {
+            ctx.draw(&top);
+            ctx.draw(&right_t);
+            ctx.draw(&right_b);
+        }
+        '8' => {
+            ctx.draw(&top);
+            ctx.draw(&mid);
+            ctx.draw(&bottom);
+            ctx.draw(&left_t);
+            ctx.draw(&left_b);
+            ctx.draw(&right_t);
+            ctx.draw(&right_b);
+        }
+        '9' => {
+            ctx.draw(&top);
+            ctx.draw(&mid);
+            ctx.draw(&bottom);
+            ctx.draw(&left_t);
+            ctx.draw(&right_t);
+            ctx.draw(&right_b);
+        }
+        ':' => {
+            let dot_size = 2.0;
+            let x_pos = x_offset + w / 2.0 - dot_size / 2.0;
+            ctx.draw(&Rectangle {
+                x: x_pos,
+                y: y_offset + h * 0.7 - dot_size / 2.0,
+                width: dot_size,
+                height: dot_size,
+                color,
+            });
+
+            ctx.draw(&Rectangle {
+                x: x_pos,
+                y: y_offset + h * 0.3 - dot_size / 2.0,
+                width: dot_size,
+                height: dot_size,
+                color,
+            });
+        }
+        _ => {}
+    }
+}
+
+/// 绘制canvas, 大数值, 实际渲染到画布中
+pub(crate) fn canvas_draw_current_time(ctx: &mut Context) {
+    let now = chrono::Local::now();
+    let time_str: Vec<char> = now.format("%H:%M").to_string().chars().collect();
+    // let time_str: Vec<char> = "000:000".chars().collect();
+
+    // 渲染数字的大小, 随外部容器大小变化, 这里只是百分比
+    let w = 12.0;
+    let h = 60.0;
+    let y_offset = (100.0 - h) / 2.0;
+    let standard_spacing = 8.0;
+
+    let mut total_content_width = 0.0;
+    for idx in 0..time_str.len() {
+        let c = time_str[idx];
+        let char_w = if c == ':' { w / 3.0 } else { w };
+        total_content_width += char_w;
+
+        if idx < time_str.len() - 1 {
+            let c_next = time_str.get(idx + 1);
+            let next_spacing = if c == ':' || c_next == Some(&':') {
+                standard_spacing * 0.8
+            } else {
+                standard_spacing
+            };
+            total_content_width += next_spacing;
+        }
+    }
+    // 水平居中, 理论上应该渲染的起始位置
+    let mut current_x = (100.0 - total_content_width) / 2.0;
+
+    for idx in 0..time_str.len() {
+        let c = time_str[idx];
+        let char_w = if c == ':' { w / 3.0 } else { w };
+
+        ui::draw_big_digit(ctx, current_x, y_offset, c, char_w, h);
+
+        let c_next = time_str.get(idx + 1);
+        let next_spacing = if c == ':' || c_next == Some(&':') {
+            standard_spacing * 0.8
+        } else {
+            standard_spacing
+        };
+        current_x += char_w + next_spacing;
+    }
 }
