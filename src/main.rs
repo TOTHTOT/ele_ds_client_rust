@@ -222,6 +222,7 @@ fn update_weather_per_hour(config: &mut DeviceConfig) -> anyhow::Result<()> {
             Weather::new(&config.city_name, &config.weather_api_key).get_weather_hefeng()?,
         );
         config.last_update_weather = now;
+        config.save_config()?;
         Ok(())
     } else {
         Ok(())

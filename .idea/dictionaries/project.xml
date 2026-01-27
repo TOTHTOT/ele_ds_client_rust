@@ -5,7 +5,9 @@
       <w>clippy</w>
       <w>deemphasis</w>
       <w>dout</w>
+      <w>fxlink</w>
       <w>humi</w>
+      <w>isdst</w>
       <w>lrck</w>
       <w>mclk</w>
       <w>mousefood</w>
@@ -15,6 +17,7 @@
       <w>sclk</w>
       <w>sntp</w>
       <w>sysloop</w>
+      <w>utcoffset</w>
       <w>vbat</w>
       <w>vmid</w>
       <w>vout</w>

@@ -164,7 +164,7 @@ impl EleDsHttpClient {
 
         let status = response.status();
         if status != 200 {
-            anyhow::bail!("GET request failed with status: {status}");
+            anyhow::bail!("GET request failed with status: {status}, url: {full_url}");
         }
 
         let mut recv_vec = Vec::new();

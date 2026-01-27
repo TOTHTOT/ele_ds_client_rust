@@ -45,7 +45,8 @@ pub struct DeviceConfig {
     pub requery_upgrade_time_minutes: u32, // 查询更新版本间隔, 单位: 分钟
     pub wifi_max_link_time: u8,            // wifi最大连接时间, 秒
     pub time_zone: String,                 // 时区
-    pub city_name: String,                 // 所在城市地点, 获取天气
+    pub city_name: String,                 // 所在城市地点, 获取天气, 用于查询城市, 可以是中文
+    pub city_name_show: String,            // 和 city_name 对应, 这个是实际屏幕显示的英文名称
     pub wifi_connect_interval: u32,        // WiFi 连接的电源周期间隔, 和 boot_times 一起用
     pub boot_times: u32,                   // 重启次数
     pub current_page: ActivePage,          // 当前活动的页面, 掉电前同步
@@ -64,7 +65,8 @@ impl Default for DeviceConfig {
             requery_upgrade_time_minutes: 1440,
             wifi_max_link_time: 30,
             time_zone: "CST-8".to_string(),
-            city_name: "FujianFuzhou".to_string(),
+            city_name: "福州".to_string(),
+            city_name_show: "Fuzhou".to_string(),
             wifi_connect_interval: 60,
             boot_times: 0,
             current_page: ActivePage::default(),

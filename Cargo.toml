@@ -52,6 +52,7 @@ flate2 = { version = "1.1.8", features = ["miniz_oxide"] }
 awedio_esp32 = "0.8.0"
 awedio = "0.6.0"
 hound = "3.5.1"
+percent-encoding = "2.3.2"
 # b) With embassy-executor:
 # embassy-executor = { version = "0.7", features = ["executor-thread", "arch-std"] }
 

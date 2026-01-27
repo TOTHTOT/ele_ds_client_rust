@@ -1,5 +1,6 @@
 use crate::communication::http_client::EleDsHttpClient;
 use chrono::Timelike;
+use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -111,11 +112,11 @@ impl Weather {
     }
 
     fn get_city_id_from_name(&self, client: &mut EleDsHttpClient) -> anyhow::Result<String> {
+        let city_name = utf8_percent_encode(&self.city, NON_ALPHANUMERIC).to_string();
         let url = format!(
-            "https://geoapi.qweather.com/v2/city/lookup?key={}&location={}",
-            self.key, self.city
+            "https://geoapi.qweather.com/v2/city/lookup?key={}&lang=en&location={city_name}",
+            self.key
         );
-
         let json_str = client.get_msg(&url)?;
 
         let geo_data: GeoResponse = serde_json::from_str(&json_str)?;

@@ -119,8 +119,10 @@ fn get_display_func<'d>(
         }
         ActivePage::Home => {
             let mut home = HomePageInfo {
-                weather_info: weather_response.get_ui_need_data()?,
-                city: device_config.city_name.clone(),
+                weather_info: weather_response
+                    .get_ui_need_data()
+                    .unwrap_or(Default::default()),
+                city: device_config.city_name_show.clone(),
                 ui_info,
             };
             Box::new(move |f| home.home_page(f))
