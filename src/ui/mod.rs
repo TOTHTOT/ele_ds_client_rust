@@ -7,9 +7,11 @@ use crate::ui::popup::PopupMsg;
 use crate::ui::sensor_page::SensorPage;
 use crate::{ui, ActivePage};
 use anyhow::anyhow;
-use mousefood::prelude::{Color, Frame, Rect, Style, Stylize, Terminal};
+use mousefood::prelude::{
+    Alignment, Color, Constraint, Direction, Frame, Layout, Rect, Style, Stylize, Terminal,
+};
 use mousefood::ratatui::widgets::canvas::{Context, Line, Rectangle};
-use mousefood::ratatui::widgets::Block;
+use mousefood::ratatui::widgets::{Block, Paragraph};
 use mousefood::{fonts, EmbeddedBackend, EmbeddedBackendConfig};
 use ssd1680::prelude::Display;
 use std::sync::{Arc, Mutex};
@@ -19,6 +21,7 @@ macro_rules! hw_try {
         $e.map_err(|e| anyhow::anyhow!("{}: {:?}", $msg, e))?
     };
 }
+pub mod about_page;
 pub mod home_page;
 mod image_page;
 pub mod popup;
@@ -370,5 +373,39 @@ pub(crate) fn canvas_draw_current_time(ctx: &mut Context) {
             standard_spacing
         };
         current_x += char_w + next_spacing;
+    }
+}
+
+/// 显示传入 contents, 标题和内容分布在左右两端
+fn show_contents_from_chunks(f: &mut Frame, main_area: Rect, contents: &[(&str, String)]) {
+    let chunk_size = contents.len().max(main_area.width as usize); // 限制显示的最大行数, 避免超过, 虽然可能不会出问题
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1) // 留出一点边距防止贴边
+        .constraints(
+            (0..chunk_size)
+                .map(|_| Constraint::Ratio(1, chunk_size as u32))
+                .collect::<Vec<Constraint>>(),
+        )
+        .split(main_area);
+
+    for (i, (label, value)) in contents.iter().enumerate() {
+        let item_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Length(6), // 标签固定宽度
+                Constraint::Min(10),   // 数值占用剩余空间
+            ])
+            .split(chunks[i]);
+
+        f.render_widget(
+            Paragraph::new(format!("[{label}]",)).alignment(Alignment::Left),
+            item_chunks[0],
+        );
+
+        f.render_widget(
+            Paragraph::new(value.as_str()).alignment(Alignment::Right),
+            item_chunks[1],
+        );
     }
 }

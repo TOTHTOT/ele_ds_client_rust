@@ -1,5 +1,4 @@
 use crate::board::peripheral::Screen;
-use crate::ui;
 use crate::ui::{general_block, UiInfo};
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::{image::Image, prelude::*};
