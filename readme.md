@@ -80,12 +80,17 @@
   curl -X PUT --data-binary "@src/main.rs" http://10.22.110.117/fat/A/B/C/new_file.txt
   ```
   
-- 发送图片资源
-```shell
-cd assets/tool/generate_number_bmp
-for file in time_num_data/*.bmp; do
-  filename=$(basename "$file")
-  echo "正在上传: $filename ..."
-  curl -X PUT --data-binary "@$file" "http://192.168.137.183/fat/system/tmd/$filename"
-done
-```
+- 发送时间图片资源
+  ```shell
+  cd assets/tool/generate_number_bmp
+  for file in time_num_data/*.bmp; do
+    filename=$(basename "$file")
+    echo "正在上传: $filename ..."
+    curl -X PUT --data-binary "@$file" "http://192.168.137.183/fat/system/tmd/$filename"
+  done
+  ```
+- 发送image页面图片资源
+  ```shell
+  cd ./assets/tool/switch_bmp
+  curl -X PUT --data-binary @test.bmp "http://192.168.137.224/fat/system/images/test.bmp"
+  ```

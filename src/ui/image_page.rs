@@ -41,29 +41,29 @@ impl ImagePageInfo {
             height: 7,
         };
 
-        Self::pat_image(&mut screen.bw_buf, info, main_area)?;
+        Self::pat_image(&mut screen.bw_buf, &info.image_path, main_area)?;
         Ok(())
     }
 
     pub fn image_page(&mut self, f: &mut Frame) {
         let main_area = general_block(f, &self.ui_info);
         log::info!("main_area: {main_area:?}");
-        f.render_widget(
-            Canvas::default()
-                .marker(Marker::HalfBlock)
-                .x_bounds([0.0, 100.0])
-                .y_bounds([0.0, 100.0])
-                .paint(ui::canvas_draw_current_time),
-            main_area,
-        );
+        // f.render_widget(
+        //     Canvas::default()
+        //         .marker(Marker::HalfBlock)
+        //         .x_bounds([0.0, 100.0])
+        //         .y_bounds([0.0, 100.0])
+        //         .paint(ui::canvas_draw_current_time),
+        //     main_area,
+        // );
     }
 
-    fn pat_image(
+    pub fn pat_image(
         buf: &mut DisplayAnyIn,
-        info: &ImagePageInfo,
+        image_path: &str,
         main_area: Rect,
     ) -> anyhow::Result<()> {
-        let raw_data = std::fs::read(&info.image_path)?;
+        let raw_data = std::fs::read(image_path)?;
 
         let char_w = 6;
         let char_h = 13;

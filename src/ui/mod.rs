@@ -51,6 +51,22 @@ pub fn mouse_food_test(
     display_select_page(screen, set_active_page, device_config, popup_msg)?;
 
     screen.current_page = set_active_page;
+
+    // 由于ratatui的canvas限制, 显示的最小像素是字符而不是屏幕上的像素点, 这会导致分辨率降低, 为了显示bmp只能拉到外面最后绘制实际的显存
+    if set_active_page == ActivePage::Image {
+        if let Err(e) = ImagePageInfo::pat_image(
+            &mut screen.bw_buf,
+            "/fat/system/images/test.bmp",
+            Rect {
+                x: 1,
+                y: 1,
+                width: 47,
+                height: 7,
+            },
+        ) {
+            log::warn!("load image failed: {e:?}");
+        }
+    }
     // 单独解构这些, 避免借用问题
     let Screen {
         ref mut ssd1680,
@@ -58,7 +74,6 @@ pub fn mouse_food_test(
         ref mut bw_buf,
         ..
     } = &mut *screen;
-
     hw_try!(ssd1680.init(delay), "Ssd1680 init");
     hw_try!(ssd1680.update_bw_frame(bw_buf.buffer()), "Ssd1680 update");
     hw_try!(ssd1680.display_frame(delay), "Ssd1680 display");
