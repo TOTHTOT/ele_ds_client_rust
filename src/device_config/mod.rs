@@ -1,6 +1,7 @@
 use crate::communication::weather::WeatherResponse;
 use crate::ActivePage;
 use chrono::{Datelike, Local};
+use embedded_svc::ipv4::IpInfo;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::fs::OpenOptions;
@@ -53,6 +54,7 @@ pub struct DeviceConfig {
     pub weather_api_key: String,           // 获取天气数据api的key
     pub weather: Option<WeatherResponse>,  // 天气数据
     pub last_update_weather: u32,          // 最近一次更新天气的小时
+    pub ip_info: Option<IpInfo>,           // 如果网络连接成功就保存ip信息
 }
 
 impl Default for DeviceConfig {
@@ -73,6 +75,7 @@ impl Default for DeviceConfig {
             weather_api_key: "e7d95a70480a4d6c9140378d9d100d42".to_string(),
             weather: None,
             last_update_weather: 0,
+            ip_info: None,
         }
     }
 }

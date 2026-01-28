@@ -6,7 +6,7 @@ use crate::ui::home_page::HomePageInfo;
 use crate::ui::image_page::ImagePageInfo;
 use crate::ui::popup::PopupMsg;
 use crate::ui::sensor_page::SensorPage;
-use crate::{get_ip_address, ui, ActivePage};
+use crate::ActivePage;
 use anyhow::anyhow;
 use mousefood::prelude::{
     Alignment, Color, Constraint, Direction, Frame, Layout, Rect, Style, Stylize, Terminal,
@@ -55,8 +55,9 @@ pub fn mouse_food_test(
         return Ok(());
     }
     display_select_page(screen, set_active_page, device_config, popup_msg)?;
-
-    screen.current_page = set_active_page;
+    if !set_active_page.cur_page_is_need_record() {
+        screen.current_page = set_active_page;
+    }
 
     // 由于ratatui的canvas限制, 显示的最小像素是字符而不是屏幕上的像素点, 这会导致分辨率降低, 为了显示bmp只能拉到外面最后绘制实际的显存
     if set_active_page == ActivePage::Image {
@@ -156,8 +157,13 @@ fn get_display_func<'d>(
             Box::new(move |f| image.image_page(f))
         }
         ActivePage::About => {
+            let ip = if let Some(ip_info) = device_config.ip_info {
+                ip_info.ip.to_string()
+            } else {
+                "Wifi unlink".to_string()
+            };
             let mut about = AboutPage {
-                ip_addr: get_ip_address().unwrap_or("None".to_string()),
+                ip_addr: ip,
                 connect_wifi: device_config.wifi_ssid.clone(),
                 wifi_password: device_config.wifi_password.clone(),
                 soft_version: device_config.device_info.version.clone(),
@@ -377,7 +383,7 @@ pub(crate) fn canvas_draw_current_time(ctx: &mut Context) {
         let c = time_str[idx];
         let char_w = if c == ':' { w / 3.0 } else { w };
 
-        ui::draw_big_digit(ctx, current_x, y_offset, c, char_w, h);
+        draw_big_digit(ctx, current_x, y_offset, c, char_w, h);
 
         let c_next = time_str.get(idx + 1);
         let next_spacing = if c == ':' || c_next == Some(&':') {
@@ -391,12 +397,12 @@ pub(crate) fn canvas_draw_current_time(ctx: &mut Context) {
 
 /// 显示传入 contents, 标题和内容分布在左右两端
 fn show_contents_from_chunks(f: &mut Frame, main_area: Rect, contents: &[(&str, String)]) {
-    let chunk_size = contents.len().max(main_area.width as usize); // 限制显示的最大行数, 避免超过, 虽然可能不会出问题
+    let chunk_size = contents.len();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .margin(1) // 留出一点边距防止贴边
+        .margin(1)
         .constraints(
-            (0..chunk_size)
+            (0..chunk_size) // 如果 chunk_size 和高度除不尽会出现空行的情况, 因为四舍五入了
                 .map(|_| Constraint::Ratio(1, chunk_size as u32))
                 .collect::<Vec<Constraint>>(),
         )
@@ -406,8 +412,8 @@ fn show_contents_from_chunks(f: &mut Frame, main_area: Rect, contents: &[(&str, 
         let item_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Length(6), // 标签固定宽度
-                Constraint::Min(10),   // 数值占用剩余空间
+                Constraint::Length(16), // 标签固定宽度
+                Constraint::Min(10),    // 数值占用剩余空间
             ])
             .split(chunks[i]);
 

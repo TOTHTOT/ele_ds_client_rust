@@ -14,6 +14,7 @@
       <w>netif</w>
       <w>precip</w>
       <w>psram</w>
+      <w>ratatui</w>
       <w>sclk</w>
       <w>sntp</w>
       <w>sysloop</w>

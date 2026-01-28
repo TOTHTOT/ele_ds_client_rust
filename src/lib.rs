@@ -1,6 +1,4 @@
 // src/lib.rs
-
-use esp_idf_svc::netif::EspNetif;
 use serde::{Deserialize, Serialize};
 
 pub mod board;
@@ -35,6 +33,11 @@ impl ActivePage {
         false
     }
 
+    /// 有的界面只需要短时间显示, 下一个周期就刷新到home
+    pub fn cur_page_is_need_record(self) -> bool {
+        self == ActivePage::About || self == ActivePage::Setting
+    }
+
     /// 键值映射成页面
     pub fn from_event(button_idx: usize, click_count: u8) -> Self {
         match (click_count, button_idx) {
@@ -51,14 +54,4 @@ impl ActivePage {
             _ => ActivePage::None,
         }
     }
-}
-
-/// 获取IP地址
-pub fn get_ip_address() -> Option<String> {
-    let netif = EspNetif::new(esp_idf_svc::netif::NetifStack::Sta).ok()?;
-    if let Ok(ip_info) = netif.get_ip_info() {
-        return Some(ip_info.ip.to_string());
-    }
-
-    None
 }

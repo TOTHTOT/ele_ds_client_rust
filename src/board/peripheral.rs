@@ -11,6 +11,7 @@ use awedio::manager::Manager;
 use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::{Circle, PrimitiveStyle, Rectangle};
 use embedded_sht3x::{Measurement, Repeatability, Sht3x, DEFAULT_I2C_ADDRESS};
+use embedded_svc::ipv4::IpInfo;
 use embedded_svc::wifi;
 use embedded_svc::wifi::AuthMethod;
 use enumset::EnumSet;
@@ -116,6 +117,7 @@ pub struct BoardPeripherals {
     pub spk_en: PinDriver<'static, AnyIOPin, Output>,
 
     vout_3v3: PinDriver<'static, AnyIOPin, Output>,
+    vout_5v: PinDriver<'static, AnyIOPin, Output>,
     sht3x_rst: PinDriver<'static, AnyIOPin, Output>,
     pub sht3x: Sht3x<SharedI2cDevice<Arc<Mutex<I2cDriver<'static>>>>, Ets>,
     pub device_battery: DeviceBattery<
@@ -142,6 +144,8 @@ impl BoardPeripherals {
         // 基本io口初始化
         let mut vout_3v3 = PinDriver::output(peripherals.pins.gpio10.downgrade())?;
         vout_3v3.set_high()?;
+        let mut vout_5v = PinDriver::output(peripherals.pins.gpio11.downgrade())?;
+        vout_5v.set_high()?;
         let mut sht3x_rst = PinDriver::output(peripherals.pins.gpio19.downgrade())?;
         sht3x_rst.set_high()?;
         let mut device_battery = DeviceBattery::new(
@@ -228,6 +232,7 @@ impl BoardPeripherals {
             spk_en,
 
             vout_3v3,
+            vout_5v,
             sht3x_rst,
             sht3x,
             device_battery,
@@ -272,7 +277,7 @@ impl BoardPeripherals {
         ssid: &str,
         passwd: &str,
         timeout: u8,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<IpInfo> {
         let ssid = heapless::String::<32>::from_str(ssid)
             .map_err(|_| anyhow::anyhow!("ssid too long:{ssid}"))?;
 
@@ -296,7 +301,7 @@ impl BoardPeripherals {
                 if let Ok(ip_info) = netif.get_ip_info() {
                     if !ip_info.ip.is_unspecified() {
                         log::info!("WiFi connected IP: {:?}, total used time: {i}", ip_info.ip);
-                        return Ok(());
+                        return Ok(ip_info);
                     }
                 }
             }

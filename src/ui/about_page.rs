@@ -15,10 +15,11 @@ impl AboutPage {
         let main_area = general_block(f, &self.ui_info);
 
         let contents = [
-            ("ip addr", self.ip_addr.to_string()),
-            ("connect wifi", self.connect_wifi.to_string()),
+            ("wifi ssid", self.connect_wifi.to_string()),
             ("wifi password", self.wifi_password.to_string()),
-            ("soft_version", self.soft_version.to_string()),
+            ("ip addr", self.ip_addr.to_string()),
+            ("ble name", self.ip_addr.to_string()),
+            ("soft version", self.soft_version.to_string()),
         ];
         show_contents_from_chunks(f, main_area, &contents);
     }

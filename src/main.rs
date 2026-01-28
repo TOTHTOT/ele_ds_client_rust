@@ -24,6 +24,7 @@ fn main() -> anyhow::Result<()> {
     let mut board = BoardPeripherals::new()?;
 
     let mut device_config = BoardPeripherals::init_filesystem_load_config()?;
+    device_config.ip_info = None; // 每次上电都清空, 避免在没连上WiFi时读到了上次的ip
     get_clock_ntp::set_time_zone(device_config.time_zone.as_str())?;
     device_config.boot_times_add()?;
     let power_on_ui_page = device_config.current_page;
@@ -123,12 +124,12 @@ fn main() -> anyhow::Result<()> {
     board.es8388.start()?;
     board.spk_en.set_low()?;
     log::info!("ES8388 Registers: ");
-    board
-        .es8388
-        .read_all()?
-        .iter()
-        .enumerate()
-        .for_each(|(i, reg)| log::info!("[{i}]: {}", reg));
+    // board
+    //     .es8388
+    //     .read_all()?
+    //     .iter()
+    //     .enumerate()
+    //     .for_each(|(i, reg)| log::info!("[{i}]: {}", reg));
     // play_sine_wav(&mut board.audio_manager, 5000);
     let board = Arc::new(Mutex::new(board));
 
@@ -178,14 +179,13 @@ fn connect_net(
     if !device_config.is_need_connect_wifi() {
         return Ok(());
     }
-    if BoardPeripherals::wifi_connect(
+    if let Ok(ip_info) = BoardPeripherals::wifi_connect(
         &mut board.wifi,
         &device_config.wifi_ssid.clone(),
         &device_config.wifi_password.clone(),
         device_config.wifi_max_link_time,
-    )
-    .is_ok()
-    {
+    ) {
+        device_config.ip_info = Some(ip_info);
         if let Err(e) = after_wifi_established() {
             log::warn!("after_wifi_established failed: {e:?}");
         }
