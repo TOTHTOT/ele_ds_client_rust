@@ -1,11 +1,12 @@
 use crate::board::peripheral::{AllSensorData, Screen};
 use crate::communication::weather::WeatherResponse;
 use crate::device_config::DeviceConfig;
+use crate::ui::about_page::AboutPage;
 use crate::ui::home_page::HomePageInfo;
 use crate::ui::image_page::ImagePageInfo;
 use crate::ui::popup::PopupMsg;
 use crate::ui::sensor_page::SensorPage;
-use crate::{ui, ActivePage};
+use crate::{get_ip_address, ui, ActivePage};
 use anyhow::anyhow;
 use mousefood::prelude::{
     Alignment, Color, Constraint, Direction, Frame, Layout, Rect, Style, Stylize, Terminal,
@@ -48,7 +49,9 @@ pub fn mouse_food_test(
     set_active_page: ActivePage,
     popup_msg: Option<PopupMsg>,
 ) -> anyhow::Result<()> {
-    if set_active_page == screen.current_page && !set_active_page.cur_set_page_is_need_refresh() {
+    if set_active_page == screen.current_page && !set_active_page.cur_set_page_is_need_refresh()
+        || set_active_page == ActivePage::None
+    {
         return Ok(());
     }
     display_select_page(screen, set_active_page, device_config, popup_msg)?;
@@ -151,6 +154,16 @@ fn get_display_func<'d>(
                 ui_info,
             };
             Box::new(move |f| image.image_page(f))
+        }
+        ActivePage::About => {
+            let mut about = AboutPage {
+                ip_addr: get_ip_address().unwrap_or("None".to_string()),
+                connect_wifi: device_config.wifi_ssid.clone(),
+                wifi_password: device_config.wifi_password.clone(),
+                soft_version: device_config.device_info.version.clone(),
+                ui_info,
+            };
+            Box::new(move |f| about.about_page(f))
         }
         _ => anyhow::bail!("Not find selected page: {set_active_page:?}"),
     };

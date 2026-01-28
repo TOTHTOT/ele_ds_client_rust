@@ -1,5 +1,6 @@
 // src/lib.rs
 
+use esp_idf_svc::netif::EspNetif;
 use serde::{Deserialize, Serialize};
 
 pub mod board;
@@ -17,7 +18,7 @@ pub enum ActivePage {
     Home, // 单击中间按键
     Image,  // 单击右边按键
 
-    FullTIme,    // 双击左边按键
+    FullTime,    // 双击左边按键
     Setting,     // 双击中间按键
     FullWeather, // 双击右边按键
 
@@ -33,15 +34,31 @@ impl ActivePage {
         }
         false
     }
-}
-impl TryFrom<usize> for ActivePage {
-    type Error = anyhow::Error;
-    fn try_from(value: usize) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(ActivePage::Sensor),
-            1 => Ok(ActivePage::Home),
-            2 => Ok(ActivePage::Image),
-            _ => Err(anyhow::anyhow!("Invalid ActivePage value: {value}")),
+
+    /// 键值映射成页面
+    pub fn from_event(button_idx: usize, click_count: u8) -> Self {
+        match (click_count, button_idx) {
+            (1, 0) => ActivePage::Sensor,
+            (1, 1) => ActivePage::Home,
+            (1, 2) => ActivePage::Image,
+
+            (2, 0) => ActivePage::FullTime,
+            (2, 1) => ActivePage::Setting,
+            (2, 2) => ActivePage::FullWeather,
+
+            (3, 1) => ActivePage::About,
+
+            _ => ActivePage::None,
         }
     }
+}
+
+/// 获取IP地址
+pub fn get_ip_address() -> Option<String> {
+    let netif = EspNetif::new(esp_idf_svc::netif::NetifStack::Sta).ok()?;
+    if let Ok(ip_info) = netif.get_ip_info() {
+        return Some(ip_info.ip.to_string());
+    }
+
+    None
 }

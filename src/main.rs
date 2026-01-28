@@ -90,19 +90,28 @@ fn main() -> anyhow::Result<()> {
                 log::warn!("key receive failed");
                 continue;
             };
-            if key_info.click_type == KeyClickedType::SingleClicked {
-                if let Ok(cur_set_page) = ActivePage::try_from(key_info.idx) {
+
+            match key_info.click_type {
+                KeyClickedType::NoClick => {}
+                KeyClickedType::SingleClicked => {
+                    let cur_set_page = ActivePage::from_event(key_info.idx, 1);
                     if let Err(e) = screen_tx.send(ScreenEvent::Refresh(cur_set_page)) {
                         log::warn!("refresh active_page failed: {e:?}");
                     }
                 }
-            }
-            if key_info.click_type == KeyClickedType::DoubleClicked {
-                if let Err(e) = screen_tx.send(ScreenEvent::Popup(PopupMsg::new(
-                    "Warning".to_string(),
-                    "test".to_string(),
-                ))) {
-                    log::warn!("Popup failed: {e:?}");
+                KeyClickedType::DoubleClicked => {
+                    if let Err(e) = screen_tx.send(ScreenEvent::Popup(PopupMsg::new(
+                        "Warning".to_string(),
+                        "test".to_string(),
+                    ))) {
+                        log::warn!("Popup failed: {e:?}");
+                    }
+                }
+                KeyClickedType::TripleClicked => {
+                    let cur_set_page = ActivePage::from_event(key_info.idx, 3);
+                    if let Err(e) = screen_tx.send(ScreenEvent::Refresh(cur_set_page)) {
+                        log::warn!("refresh active_page failed: {e:?}");
+                    }
                 }
             }
             log::info!("{key_info:?}");

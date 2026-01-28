@@ -9,8 +9,8 @@ use std::io::Write;
 pub const DEFAULT_DEVICE_CONFIG_FILE_PATH: &str = "/fat/system/config"; // 默认的配置文件保存地址
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DeviceInfo {
-    version: String,
-    device_type: String,
+    pub version: String,
+    pub device_type: String,
 }
 
 impl Default for DeviceInfo {
@@ -39,7 +39,7 @@ impl Default for UserInfo {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DeviceConfig {
     user_info: UserInfo,
-    device_info: DeviceInfo,
+    pub device_info: DeviceInfo,
     pub wifi_ssid: String,
     pub wifi_password: String,
     pub requery_upgrade_time_minutes: u32, // 查询更新版本间隔, 单位: 分钟
