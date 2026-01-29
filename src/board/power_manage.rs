@@ -115,4 +115,8 @@ where
             Ok(DeviceBatteryType::PercentVbat25_0)
         }
     }
+
+    pub fn is_charging(&self) -> bool {
+        false
+    }
 }

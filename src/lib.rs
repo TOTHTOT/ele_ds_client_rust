@@ -34,7 +34,7 @@ impl ActivePage {
     }
 
     /// 有的界面只需要短时间显示, 下一个周期就刷新到home
-    pub fn cur_page_is_need_record(self) -> bool {
+    pub fn cur_page_is_not_need_record(self) -> bool {
         self == ActivePage::About || self == ActivePage::Setting
     }
 

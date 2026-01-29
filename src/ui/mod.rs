@@ -55,7 +55,7 @@ pub fn mouse_food_test(
         return Ok(());
     }
     display_select_page(screen, set_active_page, device_config, popup_msg)?;
-    if !set_active_page.cur_page_is_need_record() {
+    if !set_active_page.cur_page_is_not_need_record() {
         screen.current_page = set_active_page;
     }
 
