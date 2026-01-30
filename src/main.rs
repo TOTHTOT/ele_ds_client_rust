@@ -85,6 +85,9 @@ fn main() -> anyhow::Result<()> {
 
     // 按键命令接收线程
     let key_rx = board.key_rx.take().expect("key rx, take filed");
+    let board = Arc::new(Mutex::new(board));
+    let board_key = board.clone();
+    let device_config_key = device_config.clone();
     std::thread::spawn(move || {
         while !key_exit.load(std::sync::atomic::Ordering::Relaxed) {
             let Ok(key_info) = key_rx.recv() else {
@@ -110,7 +113,12 @@ fn main() -> anyhow::Result<()> {
                 }
                 KeyClickedType::TripleClicked => {
                     let cur_set_page = ActivePage::from_event(key_info.idx, 3);
-                    if let Err(e) = screen_tx.send(ScreenEvent::Refresh(cur_set_page)) {
+                    if cur_set_page == ActivePage::None {
+                        let mut board = board_key.lock().expect("board mutex");
+                        if let Err(e) = connect_net(&mut board, device_config_key.clone()) {
+                            log::warn!("connect failed: {e:?}");
+                        }
+                    } else if let Err(e) = screen_tx.send(ScreenEvent::Refresh(cur_set_page)) {
                         log::warn!("refresh active_page failed: {e:?}");
                     }
                 }
@@ -118,20 +126,28 @@ fn main() -> anyhow::Result<()> {
             log::info!("{key_info:?}");
         }
     });
-    if let Err(e) = connect_net(&mut board, device_config.clone()) {
-        log::warn!("connect_net failed: {e:?}");
+    {
+        let mut board = board.lock().expect("board mutex");
+        if device_config
+            .lock()
+            .expect("device_config mutex")
+            .is_need_connect_wifi()
+        {
+            if let Err(e) = connect_net(&mut board, device_config.clone()) {
+                log::warn!("connect_net failed: {e:?}");
+            }
+        }
+        board.es8388.start()?;
+        board.spk_en.set_low()?;
+        // log::info!("ES8388 Registers: ");
+        // board
+        //     .es8388
+        //     .read_all()?
+        //     .iter()
+        //     .enumerate()
+        //     .for_each(|(i, reg)| log::info!("[{i}]: {}", reg));
+        // play_sine_wav(&mut board.audio_manager, 5000);
     }
-    board.es8388.start()?;
-    board.spk_en.set_low()?;
-    log::info!("ES8388 Registers: ");
-    // board
-    //     .es8388
-    //     .read_all()?
-    //     .iter()
-    //     .enumerate()
-    //     .for_each(|(i, reg)| log::info!("[{i}]: {}", reg));
-    // play_sine_wav(&mut board.audio_manager, 5000);
-    let board = Arc::new(Mutex::new(board));
 
     let _http_server = HttpServer::new()?;
     let mut loop_times = 0; // 不断电情况下的循环次数, 可以控制一些第一次循环不执行的功能
@@ -180,9 +196,6 @@ fn connect_net(
     let Ok(mut device_config) = device_config.lock() else {
         anyhow::bail!("lock failed");
     };
-    if !device_config.is_need_connect_wifi() {
-        return Ok(());
-    }
     if let Ok(ip_info) = BoardPeripherals::wifi_connect(
         &mut board.wifi,
         &device_config.wifi_ssid.clone(),
