@@ -149,7 +149,9 @@ where
     pub fn set_spk_volume(&mut self, volume: u8) -> anyhow::Result<()> {
         let vol = volume.min(33);
         self.write_reg(Command::DacControl26, vol)?;
-        self.write_reg(Command::DacControl27, vol)
+        self.write_reg(Command::DacControl27, vol)?;
+        self.write_reg(Command::DacControl24, vol)?;
+        self.write_reg(Command::DacControl25, vol)
     }
 
     /// 对应 es8388_mic_gain: 设置 MIC PGA 增益 (0~8, 对应 0~24dB)

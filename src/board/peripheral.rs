@@ -210,8 +210,8 @@ impl BoardPeripherals {
             i2s,
             &es8388::driver::default_i2s_config(),
             peripherals.pins.gpio47, // bclk i2s总线的时钟
-            // peripherals.pins.gpio45,      // din codec支持录音功能可以把麦克风数据回传给单片机
-            peripherals.pins.gpio1,       // dout 音频输出
+            // peripherals.pins.gpio45,      // din codec支持录音功能可以把麦克风数据回传给单片机, 实际是sd_out
+            peripherals.pins.gpio45,      // dout 音频输出, 实际是 sd_in
             Some(peripherals.pins.gpio2), // mclk 给codec芯片提供的始终
             peripherals.pins.gpio48,      // ws 左右声道选择
         )
