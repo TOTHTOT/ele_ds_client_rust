@@ -1,6 +1,7 @@
 // src/lib.rs
 use serde::{Deserialize, Serialize};
 
+pub mod audio;
 pub mod board;
 pub mod cmd_menu;
 pub mod communication;

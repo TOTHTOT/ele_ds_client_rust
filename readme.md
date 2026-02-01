@@ -92,5 +92,10 @@
 - 发送image页面图片资源
   ```shell
   cd ./assets/tool/switch_bmp
-  curl -X PUT --data-binary @test.bmp "http://192.168.137.224/fat/system/images/test.bmp"
+  curl -X PUT --data-binary @test.bmp "http://192.168.137.146/fat/system/images/test.bmp"
+  ```
+- 发送测试音频页面图片资源
+  ```shell
+  cd ./assets/resource/test_resource
+  curl -X PUT --data-binary @test_audio.wav "http://192.168.137.146/fat/system/audio/audio.wav"
   ```

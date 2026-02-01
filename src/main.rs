@@ -1,4 +1,5 @@
 use chrono::Timelike;
+use ele_ds_client_rust::audio::{speaker_task, AudioCmd};
 use ele_ds_client_rust::board::button::KeyClickedType;
 use ele_ds_client_rust::board::power_manage::next_minute_left_time;
 use ele_ds_client_rust::board::{get_clock_ntp, psram};
@@ -22,8 +23,15 @@ fn main() -> anyhow::Result<()> {
     esp_idf_svc::log::EspLogger::initialize_default();
     log::info!("system start, build info: {} 12", env!("BUILD_TIME"));
     let mut board = BoardPeripherals::new()?;
+    let manger = board
+        .audio_manager
+        .take()
+        .expect("take audio_manger failed");
+    let mut screen = board.screen.take().expect("no screen");
 
-    let mut device_config = BoardPeripherals::init_filesystem_load_config()?;
+    let Ok(mut device_config) = BoardPeripherals::init_filesystem_load_config() else {
+        anyhow::bail!("no device config found");
+    };
     device_config.ip_info = None; // 每次上电都清空, 避免在没连上WiFi时读到了上次的ip
     get_clock_ntp::set_time_zone(device_config.time_zone.as_str())?;
     device_config.boot_times_add()?;
@@ -31,20 +39,25 @@ fn main() -> anyhow::Result<()> {
     let device_config = Arc::new(Mutex::new(device_config));
     let device_config_ui = device_config.clone();
 
-    let mut screen = board.screen.take().expect("no screen");
     // 赋值屏幕默认传感器数据
     let sensor_data = board.read_all_sensor()?;
     screen.last_sensor_status = Some(sensor_data);
 
-    let screen_exit = board.screen_exit.clone();
-    let key_exit = board.key_read_exit.clone();
+    // 退出标志
+    let screen_exit = board.exit.clone();
+    let key_exit = board.exit.clone();
+    let speaker_exit = board.exit.clone();
 
+    // 线程通信
+    let (audio_tx, audio_rx) = std::sync::mpsc::channel();
     let (screen_tx, screen_rx) = std::sync::mpsc::channel();
+    let key_rx = board.key_rx.take().expect("key rx, take filed");
+
     let screen_tx_main = screen_tx.clone();
     // 上电同步掉电时的页面, 避免保存的页面和实际不一样
     screen_tx_main.send(ScreenEvent::Refresh(power_on_ui_page))?;
     // 屏幕刷新线程
-    let _ = std::thread::Builder::new()
+    let _ui_handle = std::thread::Builder::new()
         .stack_size(1024 * 10)
         .name(String::from("epd"))
         .spawn(move || {
@@ -84,17 +97,18 @@ fn main() -> anyhow::Result<()> {
         });
 
     // 按键命令接收线程
-    let key_rx = board.key_rx.take().expect("key rx, take filed");
     let board = Arc::new(Mutex::new(board));
     let board_key = board.clone();
     let device_config_key = device_config.clone();
-    std::thread::spawn(move || {
+    let _key_handle = std::thread::spawn(move || {
         while !key_exit.load(std::sync::atomic::Ordering::Relaxed) {
             let Ok(key_info) = key_rx.recv() else {
                 log::warn!("key receive failed");
                 continue;
             };
-
+            if let Err(e) = audio_tx.send(AudioCmd::Beep(1, 200)) {
+                log::warn!("audio send failed: {e:?}");
+            }
             match key_info.click_type {
                 KeyClickedType::NoClick => {}
                 KeyClickedType::SingleClicked => {
@@ -115,15 +129,34 @@ fn main() -> anyhow::Result<()> {
                     let cur_set_page = ActivePage::from_event(key_info.idx, 3);
                     if cur_set_page == ActivePage::None {
                         let mut board = board_key.lock().expect("board mutex");
-                        if let Err(e) = connect_net(&mut board, device_config_key.clone()) {
-                            log::warn!("connect failed: {e:?}");
+                        match key_info.idx {
+                            0 => {
+                                if let Err(e) = connect_net(&mut board, device_config_key.clone()) {
+                                    log::warn!("connect failed: {e:?}");
+                                }
+                            }
+                            1 => {}
+                            2 => {
+                                if let Err(e) = audio_tx.send(AudioCmd::Music(
+                                    "/fat/system/audio/audio.wav".to_string(),
+                                )) {
+                                    log::warn!("audio send failed: {e:?}");
+                                }
+                            }
+                            _ => {}
                         }
                     } else if let Err(e) = screen_tx.send(ScreenEvent::Refresh(cur_set_page)) {
                         log::warn!("refresh active_page failed: {e:?}");
                     }
                 }
             }
-            log::info!("{key_info:?}");
+            log::info!("key_info: {key_info:?}");
+        }
+    });
+
+    let _audio_handle = std::thread::spawn(|| {
+        if let Err(e) = speaker_task(manger, audio_rx, speaker_exit) {
+            log::warn!("audio task failed: {e:?}");
         }
     });
     {
@@ -137,16 +170,6 @@ fn main() -> anyhow::Result<()> {
                 log::warn!("connect_net failed: {e:?}");
             }
         }
-        board.es8388.start()?;
-        board.spk_en.set_low()?;
-        // log::info!("ES8388 Registers: ");
-        // board
-        //     .es8388
-        //     .read_all()?
-        //     .iter()
-        //     .enumerate()
-        //     .for_each(|(i, reg)| log::info!("[{i}]: {}", reg));
-        // play_sine_wav(&mut board.audio_manager, 5000);
     }
 
     let _http_server = HttpServer::new()?;
@@ -176,7 +199,6 @@ fn main() -> anyhow::Result<()> {
             config.save_config()?;
         };
         let charge_flag = board.device_battery.is_charging();
-        drop(board);
 
         loop_times += 1;
         psram::check_psram();

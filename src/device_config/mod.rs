@@ -153,3 +153,11 @@ impl DeviceConfig {
         now.year() < 2025
     }
 }
+
+impl Drop for DeviceConfig {
+    fn drop(&mut self) {
+        if let Err(e) = self.save_config() {
+            log::warn!("Failed to save device config: {e}");
+        }
+    }
+}

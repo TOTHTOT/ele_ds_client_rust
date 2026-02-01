@@ -112,7 +112,7 @@ impl Screen {
 pub struct BoardPeripherals {
     pub wifi: EspWifi<'static>,
     // 音频相关
-    pub audio_manager: Manager,
+    pub audio_manager: Option<Manager>,
     pub es8388: Es8388Type,
     pub spk_en: PinDriver<'static, AnyIOPin, Output>,
 
@@ -127,11 +127,10 @@ pub struct BoardPeripherals {
     >,
 
     pub device_button: DeviceButton,
-    pub key_read_exit: Arc<AtomicBool>, // 发送信号让读按键线程退出
+    pub exit: Arc<AtomicBool>, // 发送信号让读按键线程退出
     pub key_rx: Option<std::sync::mpsc::Receiver<PressedKeyInfo>>,
 
     pub screen: Option<Screen>, // 屏幕对象需要被多个线程处理, 比如修改页面, 刷新页面
-    pub screen_exit: Arc<AtomicBool>, // 发送信号让线程退出
 }
 
 #[allow(dead_code)]
@@ -182,8 +181,8 @@ impl BoardPeripherals {
             peripherals.pins.gpio46.into(),
             peripherals.pins.gpio9.into(),
         ];
-        let key_read_exit = Arc::new(AtomicBool::new(false));
-        let key_read_exit_clone = key_read_exit.clone();
+        let exit = Arc::new(AtomicBool::new(false));
+        let key_read_exit_clone = exit.clone();
         let device_button = DeviceButton::new(key_pins, key_tx, key_read_exit_clone)?;
 
         let spi = peripherals.spi2;
@@ -201,7 +200,6 @@ impl BoardPeripherals {
             &SpiDriverConfig::default(),
         )?;
         let spi = SpiDeviceDriver::new(spi, Some(cs), &spi::config::Config::new())?;
-        let screen_exit = Arc::new(AtomicBool::new(false));
         let screen = Screen::new(spi, busy, dc, rst, 128, 296)?;
 
         let i2s = peripherals.i2s0;
@@ -220,15 +218,16 @@ impl BoardPeripherals {
         let audio_manager = backend.start();
         let es8388_i2c = SharedI2cDevice(iic_bus.clone());
         let mut spk_en = PinDriver::output(peripherals.pins.gpio20.downgrade())?;
-        spk_en.set_high()?;
+        spk_en.set_low()?;
         let mut es8388 = Es8388::new(es8388_i2c, es8388::driver::CHIP_ADDR, RunMode::AdcDac);
         es8388.init()?;
+        es8388.start()?;
         let wifi = EspWifi::new(peripherals.modem, sysloop, Some(nvs.clone()))?;
 
         Ok(BoardPeripherals {
             wifi,
             es8388,
-            audio_manager,
+            audio_manager: Some(audio_manager),
             spk_en,
 
             vout_3v3,
@@ -238,11 +237,10 @@ impl BoardPeripherals {
             device_battery,
             device_button,
 
-            key_read_exit,
+            exit,
             key_rx: Some(key_rx),
 
             screen: Some(screen),
-            screen_exit,
         })
     }
 
@@ -312,10 +310,7 @@ impl BoardPeripherals {
 
 impl Drop for BoardPeripherals {
     fn drop(&mut self) {
-        self.screen_exit
-            .store(true, std::sync::atomic::Ordering::Relaxed);
-        self.key_read_exit
-            .store(true, std::sync::atomic::Ordering::Relaxed);
+        self.exit.store(true, std::sync::atomic::Ordering::Relaxed);
         log::warn!("Dropping BoardPeripherals, close power");
         self.vout_3v3.set_low().expect("failed to set low on drop");
     }

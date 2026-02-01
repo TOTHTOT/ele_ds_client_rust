@@ -117,6 +117,6 @@ where
     }
 
     pub fn is_charging(&self) -> bool {
-        false
+        true
     }
 }
