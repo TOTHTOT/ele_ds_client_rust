@@ -15,6 +15,8 @@ use mousefood::ratatui::widgets::canvas::{Context, Line, Rectangle};
 use mousefood::ratatui::widgets::{Block, Paragraph};
 use mousefood::{fonts, EmbeddedBackend, EmbeddedBackendConfig};
 use ssd1680::prelude::Display;
+use std::sync::atomic::AtomicBool;
+use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 
 macro_rules! hw_try {
@@ -192,6 +194,42 @@ pub(super) fn general_block(f: &mut Frame, info: &UiInfo) -> Rect {
     let main_area = outer_block.inner(f.area());
     f.render_widget(outer_block, f.area());
     main_area
+}
+
+/// 屏幕刷新任务
+pub fn screen_task(
+    mut screen: Screen,
+    device_config_ui: Arc<Mutex<DeviceConfig>>,
+    screen_exit: Arc<AtomicBool>,
+    screen_rx: Receiver<ScreenEvent>,
+) {
+    while !screen_exit.load(std::sync::atomic::Ordering::Relaxed) {
+        let Ok(event) = screen_rx.recv() else {
+            continue;
+        };
+        match event {
+            ScreenEvent::Refresh(cur_set_page) => {
+                log::info!("cur_set page: {cur_set_page:?}");
+                if let Err(e) =
+                    mouse_food_test(&mut screen, device_config_ui.clone(), cur_set_page, None)
+                {
+                    log::warn!("refresh screen failed: {e:?}");
+                };
+            }
+            ScreenEvent::UpdateSensorsData(sensors_data) => {
+                screen.last_sensor_status = Some(sensors_data);
+            }
+            ScreenEvent::Popup(msg) => {
+                let cur_page = screen.current_page;
+                if let Err(e) =
+                    mouse_food_test(&mut screen, device_config_ui.clone(), cur_page, Some(msg))
+                {
+                    log::warn!("show popup screen failed: {e:?}");
+                };
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
 }
 
 // 绘制 大数字 的函数 使用 canvas

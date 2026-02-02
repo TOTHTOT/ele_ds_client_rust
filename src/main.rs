@@ -1,18 +1,20 @@
 use chrono::Timelike;
 use ele_ds_client_rust::audio::{play_sine_wav, speaker_task, AudioCmd};
-use ele_ds_client_rust::board::button::KeyClickedType;
+use ele_ds_client_rust::board::button::{KeyClickedType, PressedKeyInfo};
 use ele_ds_client_rust::board::power_manage::next_minute_left_time;
 use ele_ds_client_rust::board::{get_clock_ntp, psram};
 use ele_ds_client_rust::communication::http_server::HttpServer;
 use ele_ds_client_rust::communication::weather::Weather;
 use ele_ds_client_rust::device_config::DeviceConfig;
 use ele_ds_client_rust::ui::popup::PopupMsg;
-use ele_ds_client_rust::ui::{mouse_food_test, ScreenEvent};
+use ele_ds_client_rust::ui::ScreenEvent;
 use ele_ds_client_rust::{
     board::peripheral::BoardPeripherals,
     communication::{http_client, ota},
-    ActivePage,
+    ui, ActivePage,
 };
+use std::sync::atomic::AtomicBool;
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 
 #[allow(clippy::arc_with_non_send_sync)]
@@ -63,39 +65,7 @@ fn main() -> anyhow::Result<()> {
         .stack_size(1024 * 10)
         .name(String::from("epd"))
         .spawn(move || {
-            while !screen_exit.load(std::sync::atomic::Ordering::Relaxed) {
-                let Ok(event) = screen_rx.recv() else {
-                    continue;
-                };
-                match event {
-                    ScreenEvent::Refresh(cur_set_page) => {
-                        log::info!("cur_set page: {cur_set_page:?}");
-                        if let Err(e) = mouse_food_test(
-                            &mut screen,
-                            device_config_ui.clone(),
-                            cur_set_page,
-                            None,
-                        ) {
-                            log::warn!("refresh screen failed: {e:?}");
-                        };
-                    }
-                    ScreenEvent::UpdateSensorsData(sensors_data) => {
-                        screen.last_sensor_status = Some(sensors_data);
-                    }
-                    ScreenEvent::Popup(msg) => {
-                        let cur_page = screen.current_page;
-                        if let Err(e) = mouse_food_test(
-                            &mut screen,
-                            device_config_ui.clone(),
-                            cur_page,
-                            Some(msg),
-                        ) {
-                            log::warn!("show popup screen failed: {e:?}");
-                        };
-                    }
-                }
-                std::thread::sleep(std::time::Duration::from_millis(100));
-            }
+            ui::screen_task(screen, device_config_ui, screen_exit, screen_rx);
         });
 
     // 按键命令接收线程
@@ -105,64 +75,14 @@ fn main() -> anyhow::Result<()> {
     let _key_handle = std::thread::Builder::new()
         .stack_size(20 * 1024)
         .spawn(move || {
-            while !key_exit.load(std::sync::atomic::Ordering::Relaxed) {
-                let Ok(key_info) = key_rx.recv() else {
-                    log::warn!("key receive failed");
-                    continue;
-                };
-                log::info!("key_info: {key_info:?}");
-                let mut need_beep = true;
-                match key_info.click_type {
-                    KeyClickedType::NoClick => {}
-                    KeyClickedType::SingleClicked => {
-                        let cur_set_page = ActivePage::from_event(key_info.idx, 1);
-                        if let Err(e) = screen_tx.send(ScreenEvent::Refresh(cur_set_page)) {
-                            log::warn!("refresh active_page failed: {e:?}");
-                        }
-                    }
-                    KeyClickedType::DoubleClicked => {
-                        if let Err(e) = screen_tx.send(ScreenEvent::Popup(PopupMsg::new(
-                            "Warning".to_string(),
-                            "test".to_string(),
-                        ))) {
-                            log::warn!("Popup failed: {e:?}");
-                        }
-                    }
-                    KeyClickedType::TripleClicked => {
-                        let cur_set_page = ActivePage::from_event(key_info.idx, 3);
-                        if cur_set_page == ActivePage::None {
-                            let mut board = board_key.lock().expect("board mutex");
-                            match key_info.idx {
-                                0 => {
-                                    if let Err(e) =
-                                        connect_net(&mut board, device_config_key.clone())
-                                    {
-                                        log::warn!("connect failed: {e:?}");
-                                    }
-                                }
-                                1 => {}
-                                2 => {
-                                    need_beep = false;
-                                    if let Err(e) = audio_tx.send(AudioCmd::Music(
-                                        "/fat/system/audio/audio.wav".to_string(),
-                                    )) {
-                                        log::warn!("audio send failed: {e:?}");
-                                    }
-                                    log::info!("send music");
-                                }
-                                _ => {}
-                            }
-                        } else if let Err(e) = screen_tx.send(ScreenEvent::Refresh(cur_set_page)) {
-                            log::warn!("refresh active_page failed: {e:?}");
-                        }
-                    }
-                }
-                if need_beep {
-                    if let Err(e) = audio_tx.send(AudioCmd::Beep(1, 150)) {
-                        log::warn!("audio send failed: {e:?}");
-                    }
-                }
-            }
+            ket_task(
+                key_exit,
+                audio_tx,
+                screen_tx,
+                key_rx,
+                board_key,
+                device_config_key,
+            );
         });
 
     let _audio_handle = std::thread::Builder::new().stack_size(30 * 1024).spawn(|| {
@@ -216,6 +136,73 @@ fn main() -> anyhow::Result<()> {
             std::thread::sleep(std::time::Duration::from_micros(sleep_time));
         } else {
             ele_ds_client_rust::board::power_manage::enter_deep_sleep_mode_per_minute();
+        }
+    }
+}
+
+/// 按键任务
+fn ket_task(
+    key_exit: Arc<AtomicBool>,
+    audio_tx: Sender<AudioCmd>,
+    screen_tx: Sender<ScreenEvent>,
+    key_rx: Receiver<PressedKeyInfo>,
+    board_key: Arc<Mutex<BoardPeripherals>>,
+    device_config_key: Arc<Mutex<DeviceConfig>>,
+) {
+    while !key_exit.load(std::sync::atomic::Ordering::Relaxed) {
+        let Ok(key_info) = key_rx.recv() else {
+            log::warn!("key receive failed");
+            continue;
+        };
+        log::info!("key_info: {key_info:?}");
+        let mut need_beep = true;
+        match key_info.click_type {
+            KeyClickedType::NoClick => {}
+            KeyClickedType::SingleClicked => {
+                let cur_set_page = ActivePage::from_event(key_info.idx, 1);
+                if let Err(e) = screen_tx.send(ScreenEvent::Refresh(cur_set_page)) {
+                    log::warn!("refresh active_page failed: {e:?}");
+                }
+            }
+            KeyClickedType::DoubleClicked => {
+                if let Err(e) = screen_tx.send(ScreenEvent::Popup(PopupMsg::new(
+                    "Warning".to_string(),
+                    "test".to_string(),
+                ))) {
+                    log::warn!("Popup failed: {e:?}");
+                }
+            }
+            KeyClickedType::TripleClicked => {
+                let cur_set_page = ActivePage::from_event(key_info.idx, 3);
+                if cur_set_page == ActivePage::None {
+                    let mut board = board_key.lock().expect("board mutex");
+                    match key_info.idx {
+                        0 => {
+                            if let Err(e) = connect_net(&mut board, device_config_key.clone()) {
+                                log::warn!("connect failed: {e:?}");
+                            }
+                        }
+                        1 => {}
+                        2 => {
+                            need_beep = false;
+                            if let Err(e) = audio_tx
+                                .send(AudioCmd::Music("/fat/system/audio/audio.wav".to_string()))
+                            {
+                                log::warn!("audio send failed: {e:?}");
+                            }
+                            log::info!("send music");
+                        }
+                        _ => {}
+                    }
+                } else if let Err(e) = screen_tx.send(ScreenEvent::Refresh(cur_set_page)) {
+                    log::warn!("refresh active_page failed: {e:?}");
+                }
+            }
+        }
+        if need_beep {
+            if let Err(e) = audio_tx.send(AudioCmd::Beep(1, 150)) {
+                log::warn!("audio send failed: {e:?}");
+            }
         }
     }
 }
