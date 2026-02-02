@@ -1,9 +1,14 @@
 use awedio::manager::Manager;
 use awedio::sounds;
-use awedio::Sound;
+use awedio::sounds::{open_file, MemorySound};
+use hound::WavReader;
+use std::io::Cursor;
+use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
+
+const WAV_DATA: &[u8] = include_bytes!("../../assets/resource/test_resource/test_audio.wav");
 
 #[derive(Debug)]
 pub enum AudioCmd {
@@ -33,12 +38,11 @@ pub fn speaker_task(
                 }
             }
             AudioCmd::Music(path) => {
+                manager.clear();
                 log::info!("music: {path}");
-                let (sound, _notifier) = sounds::open_file_with_buffer_capacity(path, 16 * 1024)?
-                    .with_completion_notifier();
-
-                manager.play(Box::new(sound));
-                // manager.play(Box::new(sound));
+                let path = Path::new(&path);
+                let sound = open_file(path)?;
+                manager.play(sound);
             }
         }
         std::thread::sleep(Duration::from_millis(100));
@@ -70,5 +74,27 @@ pub fn play_button_beep(manager: &mut Manager, times: u32, duration_ms: u64, end
         }
         m.clear();
         end.store(true, std::sync::atomic::Ordering::Relaxed);
+        log::info!("beep end");
     });
+}
+
+pub fn play_wav(manager: &mut Manager) {
+    // 1. 使用 hound 读取 wav 格式
+
+    let mut reader = WavReader::new(Cursor::new(WAV_DATA)).expect("无效的 WAV 格式");
+    let spec = reader.spec();
+
+    // 2. 提取采样点
+    let samples: Vec<i16> = reader.samples::<i16>().map(|s| s.unwrap()).collect();
+
+    // 3. 创建 MemorySound
+    // 注意：MemorySound::new 的参数顺序通常为 (samples, sample_rate, channels)
+    let sound = MemorySound::from_samples(
+        Arc::new(samples),
+        spec.channels,    // 源码中要求 u16
+        spec.sample_rate, // 源码中要求 u32
+    );
+
+    // 4. 包装并播放
+    manager.play(Box::new(sound));
 }

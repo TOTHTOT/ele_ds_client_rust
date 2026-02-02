@@ -1,3 +1,4 @@
+use button_driver::config::{DEFAULT_DEBOUNCE, DEFAULT_HOLD, DEFAULT_RELEASE};
 use button_driver::{Button, ButtonConfig, Mode};
 use esp_idf_svc::hal::gpio::{AnyInputPin, Input, PinDriver};
 use std::thread::JoinHandle;
@@ -38,8 +39,10 @@ impl DeviceButton {
             let btn: Button<PinDriver<'_, _, _>, Instant> = Button::new(
                 key,
                 ButtonConfig {
+                    debounce: DEFAULT_DEBOUNCE * 1.5 as u32,
+                    release: DEFAULT_RELEASE * 1.5 as u32,
+                    hold: DEFAULT_HOLD,
                     mode: Mode::PullUp,
-                    ..Default::default()
                 },
             );
             keys.push(btn);
