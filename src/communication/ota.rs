@@ -63,24 +63,30 @@ impl Ota {
         );
 
         // 开始下载文件
-        client.get_file(upgrade.download_url.as_str(), move |response| {
-            let mut buffer = [0_u8; 1024];
-            let mut ota = EspOta::new().expect("Failed to create ota client");
-            let mut update = ota.initiate_update().expect("failed to initiate update");
-            match io::utils::copy(response, &mut update, &mut buffer) {
-                Ok(_) => {
-                    // 下载完成后就重启
-                    update.complete()?;
-                    ota.mark_running_slot_valid()?;
-                    log::info!("Successfully updated");
-                    esp_idf_svc::hal::reset::restart()
-                    // Ok(())
+        client.get_file(
+            upgrade.download_url.as_str(),
+            move |response| -> anyhow::Result<()> {
+                let mut buffer = [0_u8; 1024];
+                let mut ota = EspOta::new()
+                    .map_err(|e| anyhow::anyhow!("Failed to create ota client: {e}"))?;
+                let mut update = ota
+                    .initiate_update()
+                    .map_err(|e| anyhow::anyhow!("failed to initiate update: {e}"))?;
+                match io::utils::copy(response, &mut update, &mut buffer) {
+                    Ok(_) => {
+                        // 下载完成后就重启
+                        update.complete()?;
+                        ota.mark_running_slot_valid()?;
+                        log::info!("Successfully updated");
+                        esp_idf_svc::hal::reset::restart();
+                        // Ok(())
+                    }
+                    Err(e) => {
+                        anyhow::bail!("failed to copy response: {e}");
+                    }
                 }
-                Err(e) => {
-                    anyhow::bail!("failed to copy response: {e}");
-                }
-            }
-        })?;
+            },
+        )?;
         Ok(())
     }
 
@@ -89,13 +95,25 @@ impl Ota {
         let version_str = remote_time.replace(".bin", "");
         let format = "%Y-%m-%d %H:%M:%S";
 
-        // 解析两个时间字符串
-        let build_time = NaiveDateTime::parse_from_str(env!("BUILD_TIME"), format)
-            .expect("Failed to parse BUILD_TIME");
-        let remote_time = NaiveDateTime::parse_from_str(&version_str, format)
-            .expect("Failed to parse remote version time");
-        log::info!("build_time: {build_time}, remote_time: {remote_time}");
-        remote_time > build_time
+        // BUILD_TIME 是编译时常量，格式已知正确
+        let build_time = match NaiveDateTime::parse_from_str(env!("BUILD_TIME"), format) {
+            Ok(t) => t,
+            Err(e) => {
+                log::error!("Failed to parse BUILD_TIME: {e}, this is a build configuration error");
+                return false;
+            }
+        };
+
+        // remote_time 来自服务器，解析失败时不升级
+        let remote_parsed = match NaiveDateTime::parse_from_str(&version_str, format) {
+            Ok(t) => t,
+            Err(e) => {
+                log::warn!("Failed to parse remote version time '{version_str}': {e}");
+                return false;
+            }
+        };
+        log::info!("build_time: {build_time}, remote_time: {remote_parsed}");
+        remote_parsed > build_time
     }
 
     /// 同步服务器版本

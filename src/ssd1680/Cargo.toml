@@ -37,6 +37,10 @@ lto = true
 [dependencies.display-interface]
 version = "0.5.0"
 
+[dependencies.log]
+version = "0.4"
+optional = true
+
 [dependencies.embedded-graphics]
 version = "0.8.1"
 optional = true
@@ -45,5 +49,6 @@ optional = true
 version = "1.0.0"
 
 [features]
-default = ["graphics"]
+default = ["graphics", "log"]
 graphics = ["embedded-graphics"]
+log = ["dep:log"]

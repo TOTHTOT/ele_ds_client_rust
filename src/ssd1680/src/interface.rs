@@ -85,10 +85,24 @@ where
     }
 
     /// Resets the device.
+    #[cfg(feature = "log")]
     pub(crate) fn reset(&mut self, delay: &mut impl DelayNs) {
-        self.rst.set_low().unwrap();
+        if let Err(e) = self.rst.set_low() {
+            log::error!("failed to set reset pin low: {e:?}");
+        }
         delay.delay_ms(RESET_DELAY_MS.into());
-        self.rst.set_high().unwrap();
+        if let Err(e) = self.rst.set_high() {
+            log::error!("failed to set reset pin high: {e:?}");
+        }
+        delay.delay_ms(RESET_DELAY_MS.into());
+    }
+
+    /// Resets the device (without logging).
+    #[cfg(not(feature = "log"))]
+    pub(crate) fn reset(&mut self, delay: &mut impl DelayNs) {
+        let _ = self.rst.set_low();
+        delay.delay_ms(RESET_DELAY_MS.into());
+        let _ = self.rst.set_high();
         delay.delay_ms(RESET_DELAY_MS.into());
     }
 }

@@ -78,23 +78,14 @@ pub fn play_button_beep(manager: &mut Manager, times: u32, duration_ms: u64, end
     });
 }
 
-pub fn play_wav(manager: &mut Manager) {
-    // 1. 使用 hound 读取 wav 格式
-
-    let mut reader = WavReader::new(Cursor::new(WAV_DATA)).expect("无效的 WAV 格式");
+pub fn play_wav(manager: &mut Manager) -> anyhow::Result<()> {
+    let mut reader = WavReader::new(Cursor::new(WAV_DATA))
+        .map_err(|e| anyhow::anyhow!("wav formate error: {e}"))?;
     let spec = reader.spec();
 
-    // 2. 提取采样点
-    let samples: Vec<i16> = reader.samples::<i16>().map(|s| s.unwrap()).collect();
+    let samples: Vec<i16> = reader.samples::<i16>().filter_map(|s| s.ok()).collect();
 
-    // 3. 创建 MemorySound
-    // 注意：MemorySound::new 的参数顺序通常为 (samples, sample_rate, channels)
-    let sound = MemorySound::from_samples(
-        Arc::new(samples),
-        spec.channels,    // 源码中要求 u16
-        spec.sample_rate, // 源码中要求 u32
-    );
-
-    // 4. 包装并播放
+    let sound = MemorySound::from_samples(Arc::new(samples), spec.channels, spec.sample_rate);
     manager.play(Box::new(sound));
+    Ok(())
 }

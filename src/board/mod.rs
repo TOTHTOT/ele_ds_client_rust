@@ -25,7 +25,9 @@ pub mod share_i2c_bus {
         where
             F: FnOnce(&mut Self::Bus) -> R,
         {
-            f(&mut self.lock().expect("I2C Lock poisoned"))
+            f(&mut self.lock().unwrap_or_else(|e| {
+                panic!("I2C Lock poisoned (another thread panicked while holding the lock): {e}")
+            }))
         }
     }
 

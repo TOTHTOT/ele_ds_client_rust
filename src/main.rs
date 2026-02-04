@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use chrono::Timelike;
 use ele_ds_client_rust::audio::{play_sine_wav, speaker_task, AudioCmd};
 use ele_ds_client_rust::board::button::{KeyClickedType, PressedKeyInfo};
@@ -28,10 +29,13 @@ fn main() -> anyhow::Result<()> {
     let mut manger = board
         .audio_manager
         .take()
-        .expect("take audio_manger failed");
+        .ok_or_else(|| anyhow!("audio_manager not initialized"))?;
     // 预热es8388
     play_sine_wav(&mut manger, 50);
-    let mut screen = board.screen.take().expect("no screen");
+    let mut screen = board
+        .screen
+        .take()
+        .ok_or_else(|| anyhow!("screen not initialized"))?;
 
     let Ok(mut device_config) = BoardPeripherals::init_filesystem_load_config() else {
         anyhow::bail!("no device config found");
@@ -55,7 +59,10 @@ fn main() -> anyhow::Result<()> {
     // 线程通信
     let (audio_tx, audio_rx) = std::sync::mpsc::channel();
     let (screen_tx, screen_rx) = std::sync::mpsc::channel();
-    let key_rx = board.key_rx.take().expect("key rx, take filed");
+    let key_rx = board
+        .key_rx
+        .take()
+        .ok_or_else(|| anyhow!("key_rx not initialized"))?;
 
     let screen_tx_main = screen_tx.clone();
     // 上电同步掉电时的页面, 避免保存的页面和实际不一样
@@ -91,10 +98,12 @@ fn main() -> anyhow::Result<()> {
         }
     });
     {
-        let mut board = board.lock().expect("board mutex");
+        let mut board = board
+            .lock()
+            .map_err(|e| anyhow::anyhow!("board mutex poisoned: {e}"))?;
         if device_config
             .lock()
-            .expect("device_config mutex")
+            .map_err(|e| anyhow::anyhow!("device_config mutex poisoned: {e}"))?
             .is_need_connect_wifi()
         {
             if let Err(e) = connect_net(&mut board, device_config.clone()) {
@@ -175,7 +184,10 @@ fn ket_task(
             KeyClickedType::TripleClicked => {
                 let cur_set_page = ActivePage::from_event(key_info.idx, 3);
                 if cur_set_page == ActivePage::None {
-                    let mut board = board_key.lock().expect("board mutex");
+                    let Ok(mut board) = board_key.lock() else {
+                        log::error!("board mutex poisoned");
+                        continue;
+                    };
                     match key_info.idx {
                         0 => {
                             if let Err(e) = connect_net(&mut board, device_config_key.clone()) {

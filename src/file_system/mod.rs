@@ -1,3 +1,4 @@
+use anyhow::Context;
 use esp_idf_svc::sys::*;
 use std::ffi::CString;
 use std::fs;
@@ -60,7 +61,7 @@ fn test_fs_rw() -> anyhow::Result<()> {
             .truncate(true)
             .write(true)
             .open(path)
-            .expect("create file failed");
+            .context(format!("failed to create file: {path}"))?;
         f.write_all(b"hello from rust on esp32!\n")?;
     }
     let mut s = String::new();

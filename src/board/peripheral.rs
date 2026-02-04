@@ -312,6 +312,8 @@ impl Drop for BoardPeripherals {
     fn drop(&mut self) {
         self.exit.store(true, std::sync::atomic::Ordering::Relaxed);
         log::warn!("Dropping BoardPeripherals, close power");
-        self.vout_3v3.set_low().expect("failed to set low on drop");
+        if let Err(e) = self.vout_3v3.set_low() {
+            log::error!("failed to set 3v3 power low on drop: {e}");
+        }
     }
 }
